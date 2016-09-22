@@ -1,11 +1,11 @@
 Pod::Spec.new do |s|
 s.name = 'UPLiveSDK'
-s.version = '1.0'
+s.version = '2.6'
 s.license = 'MIT'
-s.summary = 'UPLive SDK For iOS.'
+s.summary = 'UPLive SDK For iOS. 杭州又拍云科技有限公司'
 s.homepage = 'https://github.com/linKnowEasy/UPLiveSDK'
 s.authors = { 'UPYUN' => 'iOSTeam@upyun.com' }
-s.source = { :git => 'https://github.com/linKnowEasy/UPLiveSDK.git', :tag => "v1.0" }
+s.source = { :git => 'https://github.com/linKnowEasy/UPLiveSDK.git', :tag => "v2.6" }
 s.requires_arc = true
 s.ios.deployment_target = '8.0'
 # s.source_files = ['UPLiveService/**/*.{h,m}', 'UpYunSDK/Utils/**/*.{h,m}']

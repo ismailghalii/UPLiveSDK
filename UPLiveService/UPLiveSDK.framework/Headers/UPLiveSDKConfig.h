@@ -17,9 +17,10 @@ typedef NS_ENUM(NSInteger, UPLiveSDKLogger_level) {
 };
 
 @interface UPLiveSDKConfig : NSObject
-
+/// log 打印模式
 + (void)setLogLevel:(UPLiveSDKLogger_level)level;
-+ (void)setStatistcsOn:(BOOL)onOff;//播放质量统计功能，默认开
+/// 播放质量统计功能，默认开
++ (void)setStatistcsOn:(BOOL)onOff;
 
 @end
 

@@ -22,6 +22,11 @@ typedef NS_ENUM(NSInteger, UPAVStreamerStatus) {
 };
 
 
+typedef NS_ENUM(NSInteger, UPAVStreamerAudioType) {
+    UPAVStreamerAudioType_AAC,
+    UPAVStreamerAudioType_G711a,
+};
+
 @class UPAVStreamer;
 @protocol UPAVStreamerDelegate <NSObject>
 - (void)UPAVStreamer:(UPAVStreamer *)streamer statusDidChange:(UPAVStreamerStatus)status error:(NSError *)error;
@@ -56,15 +61,16 @@ typedef NS_ENUM(NSInteger, UPAVStreamerStatus) {
 - (void)pushVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer;
 - (void)pushAudioSampleBuffer:(CMSampleBufferRef)sampleBuffer;
 
-//用于推流原始图像和声音数据(或者滤镜处理之后)
+//用于推流原始图像（Pixel）和声音数据（pcm）
 - (void)pushPixelBuffer:(CVPixelBufferRef)pixelBuffer;
 - (void)pushAudioBuffer:(AudioBuffer)audioBuffer info:(AudioStreamBasicDescription)asbd;
 
-//用于推流 h264, aac 已经压缩编码的音视频数据
+//用于推流 h264, aac 或者 g711a 等已经压缩编码的音视频数据
+- (void)setAudioType:(UPAVStreamerAudioType)type;
 - (void)setVideoSpsPpsInfo:(NSData *)spspps;
 - (void)setAudioAsbdInfo:(AudioStreamBasicDescription)asbd;
 - (void)pushH264Frame:(NSData *)data isKeyFrame:(BOOL)keyFrame;
-- (void)pushAACFrame:(NSData *)data;
+- (void)pushAudioFrame:(NSData *)data;//音频格式支持aac g711a. 初始化Streamer后需要首先设置“setAudioType”。默认为UPAVStreamerAudioType_AAC
 
 //关闭推流
 - (void)stop;

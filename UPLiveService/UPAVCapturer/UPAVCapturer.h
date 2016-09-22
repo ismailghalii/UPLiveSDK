@@ -29,6 +29,7 @@ typedef NS_ENUM(NSInteger, UPPushAVStreamStatus) {
 };
 
 
+typedef void(^NetworkStateBlock)(int level);
 
 @interface UPAVCapturerDashboard: NSObject
 @property (nonatomic, readonly) float fps_capturer;
@@ -62,7 +63,7 @@ typedef NS_ENUM(NSInteger, UPPushAVStreamStatus) {
 @property (nonatomic) AVCaptureDevicePosition camaraPosition;
 @property (nonatomic) AVCaptureVideoOrientation videoOrientation;
 @property (nonatomic) UPAVCapturerPresetLevel capturerPresetLevel;
-@property (nonatomic) CGRect capturerPresetLevelFrameCropRect;
+@property (nonatomic) CGSize capturerPresetLevelFrameCropRect;
 /// 设置采集帧频
 @property (nonatomic) int32_t fps;
 /// 设置目标推流比特率
@@ -88,15 +89,16 @@ typedef NS_ENUM(NSInteger, UPPushAVStreamStatus) {
 @property (nonatomic) int increaserRate;
 /// 消除噪音
 @property (nonatomic) BOOL deNoise;
-
-
-
+/// 网络状态回调
+@property (nonatomic, copy) NetworkStateBlock networkSateBlock;
 
 
 + (UPAVCapturer *)sharedInstance;
 - (void)start;
 - (void)stop;
 - (UIView *)previewWithFrame:(CGRect)frame contentMode:(UIViewContentMode)mode;
+/// 设置水印和动态处理的 block
+- (void)setWatermarkView:(UIView *)watermarkView Block:(WatermarkBlock)block;
 
 
 

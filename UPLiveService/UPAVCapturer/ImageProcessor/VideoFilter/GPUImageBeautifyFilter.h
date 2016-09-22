@@ -17,14 +17,29 @@
 #import "GPUImage.h"
 
 @class GPUImageCombinationFilter;
+@class GPUImageSobelEdgeDetectionFilter;
 
 @interface GPUImageBeautifyFilter : GPUImageFilterGroup {
     GPUImageBilateralFilter *bilateralFilter;
-    GPUImageCannyEdgeDetectionFilter *cannyEdgeFilter;
+//    GPUImageCannyEdgeDetectionFilter *cannyEdgeFilter;
+    /// 修改参考 http://www.jianshu.com/p/dde412cab8db
+    GPUImageSobelEdgeDetectionFilter *sobelEdgeFilter;
     GPUImageCombinationFilter *combinationFilter;
     GPUImageHSBFilter *hsbFilter;
 }
 
 @property (nonatomic, assign)CGFloat level;
 //- (void)setLevel:(CGFloat)level;
+
+/// 磨皮等级调整
+@property (nonatomic, assign)CGFloat bilateralLevel;
+
+/// 边缘检测调整
+@property (nonatomic, assign)CGFloat cannyEdgeLevel;
+
+/// 饱和度调整
+@property (nonatomic, assign)CGFloat saturationLevel;
+
+/// 亮度调整
+@property (nonatomic, assign)CGFloat brightnessLevel;
 @end

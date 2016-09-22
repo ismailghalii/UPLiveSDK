@@ -57,7 +57,7 @@ NSString *const kGPUImageBeautifyFragmentShaderString = SHADER_STRING
     if (self = [super initWithFragmentShaderFromString:kGPUImageBeautifyFragmentShaderString]) {
         smoothDegreeUniform = [filterProgram uniformIndex:@"smoothDegree"];
     }
-    self.intensity = 0.5;
+    self.intensity = 0.6;
     return self;
 }
 
@@ -83,8 +83,11 @@ NSString *const kGPUImageBeautifyFragmentShaderString = SHADER_STRING
     [self addFilter:bilateralFilter];// 磨皮
     
     // Second pass: edge detection
-    cannyEdgeFilter = [[GPUImageCannyEdgeDetectionFilter alloc] init];
-    [self addFilter:cannyEdgeFilter];// 边缘检测
+    //cannyEdgeFilter = [[GPUImageCannyEdgeDetectionFilter alloc] init];
+    //[self addFilter:cannyEdgeFilter];// 边缘检测
+    sobelEdgeFilter = [[GPUImageSobelEdgeDetectionFilter alloc]init];
+    [self addFilter:sobelEdgeFilter];
+    
     
     // Third pass: combination bilateral, edge detection and origin
     combinationFilter = [[GPUImageCombinationFilter alloc] init];
@@ -95,11 +98,15 @@ NSString *const kGPUImageBeautifyFragmentShaderString = SHADER_STRING
     [hsbFilter adjustBrightness:1.1]; // 亮度
     [hsbFilter adjustSaturation:1.1]; // 饱和度
     [bilateralFilter addTarget:combinationFilter];
-    [cannyEdgeFilter addTarget:combinationFilter];
+    //[cannyEdgeFilter addTarget:combinationFilter];
+    [sobelEdgeFilter addTarget:combinationFilter];
+    
     
     [combinationFilter addTarget:hsbFilter];
     
-    self.initialFilters = [NSArray arrayWithObjects:bilateralFilter,cannyEdgeFilter,combinationFilter,nil];
+    //self.initialFilters = [NSArray arrayWithObjects:bilateralFilter,cannyEdgeFilter,combinationFilter,nil];
+    self.initialFilters = [NSArray arrayWithObjects:bilateralFilter,sobelEdgeFilter,combinationFilter,nil];
+
     self.terminalFilter = hsbFilter;
     
     return self;
@@ -108,6 +115,31 @@ NSString *const kGPUImageBeautifyFragmentShaderString = SHADER_STRING
 - (void)setLevel:(CGFloat)level {
     _level = level;
     [combinationFilter setIntensity:level];
+}
+
+- (void)setBilateralLevel:(CGFloat)bilateralLevel {
+    _bilateralLevel = bilateralLevel;
+    bilateralFilter.distanceNormalizationFactor = _bilateralLevel;
+}
+
+- (void)setCannyEdgeLevel:(CGFloat)cannyEdgeLevel {
+    
+}
+
+- (void)setBrightnessLevel:(CGFloat)brightnessLevel {
+    _brightnessLevel = brightnessLevel;
+    [self resetHsb];
+}
+
+- (void)setSaturationLevel:(CGFloat)saturationLevel {
+    _saturationLevel = saturationLevel;
+    [self resetHsb];
+}
+
+- (void)resetHsb {
+    [hsbFilter reset];
+    [hsbFilter adjustBrightness:_brightnessLevel]; // 亮度
+    [hsbFilter adjustSaturation:_saturationLevel]; // 饱和度
 }
 
 #pragma mark -

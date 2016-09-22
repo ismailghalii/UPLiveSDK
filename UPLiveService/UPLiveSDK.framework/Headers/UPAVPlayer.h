@@ -7,6 +7,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
 #import "UPLiveSDKConfig.h"
 
@@ -28,6 +29,8 @@ typedef NS_ENUM(NSInteger, UPAVStreamStatus) {
 
 typedef void(^PlayerStadusBlock)(UPAVPlayerStatus playerStatus, NSError *error);
 typedef void(^BufferingProgressBlock)(float progress);
+typedef void(^AudioBufferListReleaseBlock)(AudioBufferList *audioBufferListe);
+
 
 
 @interface UPAVPlayerStreamInfo : NSObject
@@ -47,6 +50,11 @@ typedef void(^BufferingProgressBlock)(float progress);
 @property (nonatomic, readonly) float bps;
 @property (nonatomic, readonly) int vCachedFrames;
 @property (nonatomic, readonly) int aCachedFrames;
+
+@property (readonly, nonatomic) int decodedVFrameNum;//解码的视频包数量
+@property (readonly, nonatomic) int decodedVKeyFrameNum;//解码的关键帧
+@property (readonly, nonatomic) int decodedAFrameNum;//解码的音频包数量
+
 @end
 
 
@@ -62,6 +70,20 @@ typedef void(^BufferingProgressBlock)(float progress);
 //视频流状态
 - (void)UPAVPlayer:(UPAVPlayer *)player streamStatusDidChange:(UPAVStreamStatus)streamStatus;
 - (void)UPAVPlayer:(UPAVPlayer *)player streamInfoDidReceive:(UPAVPlayerStreamInfo *)streamInfo;
+
+
+
+/*
+ 播放音频数据的回调.
+ 用途如：读取并播放音频文件，同时将音频数据送入混音器来当作背景音乐。
+ */
+- (void)UPAVPlayer:(UPAVPlayer *)audioManager
+      willRenderBuffer:(AudioBufferList *)audioBufferList
+             timeStamp:(const AudioTimeStamp *)inTimeStamp
+                frames:(UInt32)inNumberFrames
+              info:(AudioStreamBasicDescription)asbd
+             block:(AudioBufferListReleaseBlock)release;
+
 @end
 
 

@@ -26,13 +26,17 @@
     BOOL _backGroundFrameSendloopOn;
     
     //video size, capture size
-    CGRect _capturerPresetLevelFrameCropRect;
+    CGSize _capturerPresetLevelFrameCropRect;
+    dispatch_queue_t _pushFrameQueue;
+
 }
 
 @property (nonatomic, assign) int pushStreamReconnectCount;
 @property (nonatomic, strong) UPAVStreamer *rtmpStreamer;
 @property (nonatomic, strong) UPVideoCapture *upVideoCapture;
 @property (nonatomic, strong) UPAudioCapture *audioUnitRecorder;
+@property (nonatomic) dispatch_source_t networkStateTimer;
+@property (nonatomic, assign) int networkLevel;
 
 @end
 
@@ -116,12 +120,16 @@
     if (self) {
         _videoOrientation = AVCaptureVideoOrientationPortrait;
         self.capturerPresetLevel = UPAVCapturerPreset_640x480;
-        _capturerPresetLevelFrameCropRect = CGRectZero;
+        _capturerPresetLevelFrameCropRect = CGSizeZero;
         _fps = 24;
+        _networkLevel = -1;
         _viewZoomScale = 1;
         _applicationActive = YES;
         _streamingOn = YES;
         _filterOn = NO;
+        _increaserRate = 100;//原声
+        _pushFrameQueue = dispatch_queue_create("UPAVCapturer.pushFrameQueue", DISPATCH_QUEUE_SERIAL);
+
         
         _dashboard = [UPAVCapturerDashboard new];
         _dashboard.infoSource_Capturer = self;
@@ -234,14 +242,21 @@
 }
 
 - (void)setOutStreamPath:(NSString *)outStreamPath {
-    _rtmpStreamer = [[UPAVStreamer alloc] initWithUrl:outStreamPath];
-    _rtmpStreamer.audioOnly = self.audioOnly;
-    _rtmpStreamer.bitrate = _bitrate;
-    _rtmpStreamer.delegate = self;
-    _rtmpStreamer.streamingOn = _streamingOn;
+    dispatch_async(_pushFrameQueue, ^{
+        _rtmpStreamer = [[UPAVStreamer alloc] initWithUrl:outStreamPath];
+        _rtmpStreamer.audioOnly = self.audioOnly;
+        _rtmpStreamer.bitrate = _bitrate;
+        _rtmpStreamer.delegate = self;
+        _rtmpStreamer.streamingOn = _streamingOn;
+    });
 }
 
 - (void)setCamaraPosition:(AVCaptureDevicePosition)camaraPosition {
+    
+    if (self.audioOnly) {
+        return;
+    }
+    
     if (AVCaptureDevicePositionUnspecified == camaraPosition) {
         return;
     }
@@ -254,12 +269,8 @@
     }
 }
 
-- (void)resetCapturerPresetLevelFrameSizeWithCropRect:(CGRect)cropRect {
-    [_upVideoCapture resetCapturerPresetLevelFrameSizeWithCropRect:cropRect];
-}
-
-- (void)setCapturerPresetLevelFrameCropRect:(CGRect)capturerPresetLevelFrameCropRect {
-    [self resetCapturerPresetLevelFrameSizeWithCropRect:capturerPresetLevelFrameCropRect];
+- (void)setCapturerPresetLevelFrameCropRect:(CGSize)capturerPresetLevelFrameCropRect {
+    [_upVideoCapture resetCapturerPresetLevelFrameSizeWithCropRect:capturerPresetLevelFrameCropRect];
 }
 
 - (void)setVideoOrientation:(AVCaptureVideoOrientation)videoOrientation {
@@ -297,6 +308,29 @@
     _upVideoCapture.fps = fps;
 }
 
+- (void)setNetworkSateBlock:(NetworkStateBlock)networkSateBlock {
+    dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+    _networkStateTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
+    NSLog(@"==============================");
+    dispatch_time_t startTime = dispatch_time(DISPATCH_TIME_NOW, 6 * NSEC_PER_SEC);
+    dispatch_source_set_timer(_networkStateTimer, startTime, 1 * NSEC_PER_SEC, 0);
+    dispatch_source_set_event_handler(_networkStateTimer, ^{
+        if (networkSateBlock) {
+            int level = 0;
+            if (_rtmpStreamer.fps_streaming/_rtmpStreamer.fps_capturer > 0.9) {
+                level = 2;
+            } else if (_rtmpStreamer.fps_streaming/_rtmpStreamer.fps_capturer > 0.8) {
+                level = 1;
+            }
+            if (level != _networkLevel) {
+                networkSateBlock(level);
+                _networkLevel = level;
+            }
+        }
+    });
+
+}
+
 - (CGFloat)fpsCapture {
     return _rtmpStreamer.fps_capturer;
 }
@@ -315,6 +349,10 @@
     return [_upVideoCapture previewWithFrame:frame contentMode:mode];
 }
 
+- (void)setWatermarkView:(UIView *)watermarkView Block:(WatermarkBlock)block {
+    [_upVideoCapture setWatermarkView:watermarkView Block:block];
+}
+
 - (void)start {
     _rtmpStreamer.audioOnly = self.audioOnly;
     [_upVideoCapture start];
@@ -327,7 +365,10 @@
     [_upVideoCapture stop];
     [_audioUnitRecorder stop];
     self.capturerStatus = UPAVCapturerStatusStopped;
-    [_rtmpStreamer stop];
+    dispatch_async(_pushFrameQueue, ^{
+        [_rtmpStreamer stop];
+        _rtmpStreamer = nil;
+    });
     [[UIApplication sharedApplication] setIdleTimerDisabled:NO];
 }
 
@@ -460,20 +501,25 @@
 #pragma mark push Capture audio/video buffer
 
 - (void)didCapturePixelBuffer:(CVPixelBufferRef)pixelBuffer {
-    [_rtmpStreamer pushPixelBuffer:pixelBuffer];
-    _backGroundPixBuffer = pixelBuffer;
+    //视频数据压缩入列发送队列
+    dispatch_sync(_pushFrameQueue, ^{
+        [_rtmpStreamer pushPixelBuffer:pixelBuffer];
+        _backGroundPixBuffer = pixelBuffer;
+    });
 }
 
 - (void)didCaptureAudioBuffer:(AudioBuffer)audioBuffer withInfo:(AudioStreamBasicDescription)asbd{
-    typedef struct AudioBuffer  AudioBuffer;
-    if (self.audioMute) {
-        if (audioBuffer.mData) {
-            memset(audioBuffer.mData, 0, audioBuffer.mDataByteSize);
+    //音频数据压缩入列发送队列
+    dispatch_sync(_pushFrameQueue, ^{
+        typedef struct AudioBuffer  AudioBuffer;
+        if (self.audioMute) {
+            if (audioBuffer.mData) {
+                memset(audioBuffer.mData, 0, audioBuffer.mDataByteSize);
+            }
         }
-    }
-    [_rtmpStreamer pushAudioBuffer:audioBuffer info:asbd];
+        [_rtmpStreamer pushAudioBuffer:audioBuffer info:asbd];
+    });
 }
-
 
 #pragma mark upyun token
 + (NSString *)tokenWithKey:(NSString *)key
