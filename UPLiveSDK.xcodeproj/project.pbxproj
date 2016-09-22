@@ -110,6 +110,7 @@
 				TargetAttributes = {
 					AEEBB9EC1D76C64D00B8C290 = {
 						CreatedOnToolsVersion = 7.3.1;
+						DevelopmentTeam = QKY6P53UY3;
 					};
 				};
 			};
@@ -265,7 +266,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				DEVELOPMENT_TEAM = QKY6P53UY3;
 				INFOPLIST_FILE = UPLiveSDK/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.upyun.UPLiveSDK.UPLiveSDK;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -276,7 +279,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				DEVELOPMENT_TEAM = QKY6P53UY3;
 				INFOPLIST_FILE = UPLiveSDK/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.upyun.UPLiveSDK.UPLiveSDK;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -302,6 +307,7 @@
 				AEEBBA061D76C64D00B8C290 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
