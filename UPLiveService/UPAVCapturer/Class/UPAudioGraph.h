@@ -10,29 +10,28 @@
 #import <AudioToolbox/AudioToolbox.h>
 
 @class UPAudioGraph;
+
 @protocol UPAudioGraphProtocol <NSObject>
-- (void)audioGraph:(UPAudioGraph *)audioGraph didOutputBuffer:(AudioBuffer)audioBuffer info:(AudioStreamBasicDescription)asbd;
+- (void)audioGraph:(UPAudioGraph *)audioGraph
+   didOutputBuffer:(AudioBuffer)audioBuffer
+              info:(AudioStreamBasicDescription)asbd;
 @end
-
-
 
 @interface UPAudioGraph : NSObject
 @property (nonatomic, weak) id<UPAudioGraphProtocol> delegate;
 
 
-
 - (void)setMixerInputCallbackStruct:(AURenderCallbackStruct)callbackStruct;
-
 - (void)start;
 - (void)stop;
+- (void)setMixerInputPcmInfo:(AudioStreamBasicDescription)asbd forBusIndex:(int)bus;
+- (void)needRenderFramesNum:(UInt32)framesNum
+                  timeStamp:(const AudioTimeStamp *)inTimeStamp
+                       flag:(AudioUnitRenderActionFlags *)ioActionFlags;
 
-- (void)setMixerInputVolume:(UInt32)inputIndex value:(Float32)value;
-- (Float32)getMixerInputVolume:(UInt32)inputIndex;
-- (void)setMixertOutputVolume:(Float32)value;
-- (Float32)getMixertOutputVolume;
-- (void)needRenderFramesNum:(UInt32)framesNum;
-- (void)needRenderFramesNum:(UInt32)framesNum timeStamp:(AudioTimeStamp *)inTimeStamp flag:(AudioUnitRenderActionFlags *)ioActionFlags;
-
-
+// volume ＝ 1.0  是原声音量
+@property (nonatomic, assign) Float32 volumeOfInputBus0;
+@property (nonatomic, assign) Float32 volumeOfInputBus1;
+@property (nonatomic, assign) Float32 volumeOfOutput;
 
 @end

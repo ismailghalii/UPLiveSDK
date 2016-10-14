@@ -62,27 +62,30 @@ typedef void(^AudioBufferListReleaseBlock)(AudioBufferList *audioBufferListe);
 
 @protocol UPAVPlayerDelegate <NSObject>
 //播放器状态
-- (void)UPAVPlayer:(UPAVPlayer *)player playerStatusDidChange:(UPAVPlayerStatus)playerStatus;
-- (void)UPAVPlayer:(UPAVPlayer *)player playerError:(NSError *)error;
-- (void)UPAVPlayer:(UPAVPlayer *)player displayPositionDidChange:(float)position;
-- (void)UPAVPlayer:(UPAVPlayer *)player bufferingProgressDidChange:(float)progress;
+@optional
+- (void)player:(UPAVPlayer *)player playerStatusDidChange:(UPAVPlayerStatus)playerStatus;
+- (void)player:(UPAVPlayer *)player displayPositionDidChange:(float)position;
+- (void)player:(UPAVPlayer *)player bufferingProgressDidChange:(float)progress;
+
+@required
+- (void)player:(UPAVPlayer *)player playerError:(NSError *)error;
 
 //视频流状态
-- (void)UPAVPlayer:(UPAVPlayer *)player streamStatusDidChange:(UPAVStreamStatus)streamStatus;
-- (void)UPAVPlayer:(UPAVPlayer *)player streamInfoDidReceive:(UPAVPlayerStreamInfo *)streamInfo;
-
-
+@optional
+- (void)player:(UPAVPlayer *)player streamStatusDidChange:(UPAVStreamStatus)streamStatus;
+- (void)player:(UPAVPlayer *)player streamInfoDidReceive:(UPAVPlayerStreamInfo *)streamInfo;
 
 /*
  播放音频数据的回调.
  用途如：读取并播放音频文件，同时将音频数据送入混音器来当作背景音乐。
  */
-- (void)UPAVPlayer:(UPAVPlayer *)audioManager
-      willRenderBuffer:(AudioBufferList *)audioBufferList
-             timeStamp:(const AudioTimeStamp *)inTimeStamp
-                frames:(UInt32)inNumberFrames
-              info:(AudioStreamBasicDescription)asbd
-             block:(AudioBufferListReleaseBlock)release;
+@optional
+- (void)player:(UPAVPlayer *)audioManager
+willRenderBuffer:(AudioBufferList *)audioBufferList
+     timeStamp:(const AudioTimeStamp *)inTimeStamp
+        frames:(UInt32)inNumberFrames
+          info:(AudioStreamBasicDescription)asbd
+         block:(AudioBufferListReleaseBlock)release;
 
 @end
 

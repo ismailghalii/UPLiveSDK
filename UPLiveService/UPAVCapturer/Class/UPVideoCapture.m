@@ -38,7 +38,7 @@
 }
 
 @property (nonatomic, copy) NSString *sessionPreset;
-@property (nonatomic, strong) GPUImageVideoCamera *videoCamera;
+
 //@property (nonatomic, strong) LFGPUImageBeautyFilter *beautifyFilter;
 @property (nonatomic, strong) GPUImageBeautifyFilter *beautifyFilter;
 
@@ -72,6 +72,7 @@
         _fps = 24;
         _viewZoomScale = 1;
         _filterOn = NO;
+        [self addNotifications];
     }
     return self;
 }
@@ -336,7 +337,11 @@
         return;
     }
     _camaraPosition = camaraPosition;
-
+    
+    if (!_videoCamera) {
+        return;
+    }
+    
     [self.videoCamera stopCameraCapture];
     [self gpuImageCameraSetup];
     [self.videoCamera startCameraCapture];
@@ -761,4 +766,27 @@
         }
     } return nil;
 }
+
+- (void)addNotifications {
+    NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
+    [notificationCenter addObserver:self
+                           selector:@selector(applicationWillResignActive:)
+                               name:UIApplicationWillResignActiveNotification
+                             object:[UIApplication sharedApplication]];
+    
+    [notificationCenter addObserver:self
+                           selector:@selector(applicationDidBecomeActive:)
+                               name:UIApplicationDidBecomeActiveNotification
+                             object:[UIApplication sharedApplication]];
+}
+
+
+- (void)applicationWillResignActive:(NSNotification *)notification {
+    [self.videoCamera pauseCameraCapture];
+}
+
+- (void)applicationDidBecomeActive:(NSNotification *)notification {
+    [self.videoCamera resumeCameraCapture];
+}
+
 @end

@@ -11,6 +11,8 @@
 #import <Accelerate/Accelerate.h>
 #import <UPLiveSDK/AudioProcessor.h>
 #import "UPAudioGraph.h"
+#import <UPLiveSDK/UPAVPlayer.h>
+
 
 
 #define kBusOutput 0
@@ -26,9 +28,9 @@
  */
 
 
-static float UPAudioCapture_volumRate(float db) {
-    return  powf(2,(db / 10.));
-}
+//static float UPAudioCapture_volumRate(float db) {
+//    return  powf(2,(db / 10.));
+//}
 
 static float UPAudioCapture_db(float volum) {
     if (volum < 0) {
@@ -43,15 +45,21 @@ static float UPAudioCapture_gain(float db) {
 }
 
 
-@interface UPAudioCapture()<UPAudioGraphProtocol>
+@interface UPAudioCapture()<UPAudioGraphProtocol, UPAVPlayerDelegate>
 {
     AudioProcessor *_pcmProcessor;
     UPAudioGraph *_audioGraph;// 混音均衡器等后续处理
-    
-    //混音输入的两个音频源
+    //混音模块
     //todo: Pool max size limit
     NSMutableData *_mixerInputPcmPoolForBus0;
     NSMutableData *_mixerInputPcmPoolForBus1;
+    UPAVPlayer *_bgmPlayer;//背景音播放器
+    AudioStreamBasicDescription _asbdBus1;//背景音频输入格式
+    BOOL _asbdBus1Set;
+    AudioStreamBasicDescription _asbdBus0;//麦克风采集音频输入格式
+    BOOL _asbdBus0Set;
+    dispatch_queue_t _queue;
+
 }
 @property (nonatomic) AudioComponentInstance audioUnit;
 @property (nonatomic) AudioBuffer tempBuffer;
@@ -109,6 +117,8 @@ static OSStatus audioRecordingCallback(void *inRefCon,
         [iosAudio processAudio:&bufferList framesNum:inNumberFrames timeStamp:inTimeStamp flag:ioActionFlags];
         free(bufferList.mBuffers[0].mData);
         
+        
+        
         return noErr;
     }
 }
@@ -126,13 +136,6 @@ static OSStatus renderInput(void *inRefCon,
                             UInt32 inNumberFrames,
                             AudioBufferList *ioData) {
     
-    /*
-     AudioBuffer buffer = ioData->mBuffers[0];
-     NSLog(@"inBusNumber  %d  inNumberFrames %d  ioData->mNumberBuffers %d  buffer.mDataByteSize %d", inBusNumber, inNumberFrames, ioData->mNumberBuffers, buffer.mDataByteSize);
-     2016-09-13 14:26:51.487 UPLiveSDKDemo[2695:724039] inBusNumber  0  inNumberFrames 1024  ioData->mNumberBuffers 1  buffer.mDataByteSize 2048
-     2016-09-13 14:26:51.487 UPLiveSDKDemo[2695:724039] inBusNumber  1  inNumberFrames 1024  ioData->mNumberBuffers 1  buffer.mDataByteSize 2048
-     */
-    
     @autoreleasepool {
         UPAudioCapture *obj = (__bridge UPAudioCapture *)inRefCon;
         AudioBuffer buffer = ioData->mBuffers[0];// 单声道音频
@@ -140,6 +143,8 @@ static OSStatus renderInput(void *inRefCon,
         NSData *needData = [obj dequeuePcmDataFor:inBusNumber length:needlen];
         if (needData) {
             memcpy(buffer.mData, needData.bytes, needlen);
+        } else {
+            memset(buffer.mData, 0, needlen);
         }
 //        NSLog(@"renderInput wow! inBusNumber %d", inBusNumber);
         return noErr;
@@ -178,19 +183,59 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
         _pcmProcessor = [[AudioProcessor alloc] initWithNoiseSuppress:-7 samplerate:44100];
         _mixerInputPcmPoolForBus0 = [NSMutableData new];
         _mixerInputPcmPoolForBus1 = [NSMutableData new];
-        _audioGraph = [[UPAudioGraph alloc] init];
-        _audioGraph.delegate = self;
         
+        //默认音频采集格式
+        _audioFormat.mSampleRate		= 44100.00;
+        _audioFormat.mFormatID			= kAudioFormatLinearPCM;
+        _audioFormat.mFormatFlags		= kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+        _audioFormat.mFramesPerPacket	= 1;
+        _audioFormat.mChannelsPerFrame	= KDefaultChannelsNum;
+        _audioFormat.mBitsPerChannel	= 16;
+        _audioFormat.mBytesPerPacket	= 2 * KDefaultChannelsNum;
+        _audioFormat.mBytesPerFrame		= 2 * KDefaultChannelsNum;
         
-        AURenderCallbackStruct mixerInputCallbackStruct;
-        mixerInputCallbackStruct.inputProcRefCon = (__bridge void *)(self);
-        mixerInputCallbackStruct.inputProc = renderInput;
-        [_audioGraph setMixerInputCallbackStruct:mixerInputCallbackStruct];
+        _asbdBus0Set = YES;
+        _asbdBus0 = _audioFormat;
+        _asbdBus1Set = NO;
+        _queue = dispatch_queue_create("UPAudioCapture.queue", DISPATCH_QUEUE_SERIAL);
+        
         self.category = category;
         self.increaserRate = 100;
         [self setup];
+        [self setupAudioGraph];
     }
     return self;
+}
+
+- (void)setupAudioGraph {
+    _audioGraph = [[UPAudioGraph alloc] init];
+    _audioGraph.delegate = self;
+    AURenderCallbackStruct mixerInputCallbackStruct;
+    mixerInputCallbackStruct.inputProcRefCon = (__bridge void *)(self);
+    mixerInputCallbackStruct.inputProc = renderInput;
+    [_audioGraph setMixerInputCallbackStruct:mixerInputCallbackStruct];
+    
+    if (_asbdBus0Set) {
+        [_audioGraph setMixerInputPcmInfo:_asbdBus0 forBusIndex:0];
+    }
+    if (_asbdBus1Set) {
+        [_audioGraph setMixerInputPcmInfo:_asbdBus1 forBusIndex:1];
+    }
+    
+    @synchronized (_mixerInputPcmPoolForBus0) {
+        _mixerInputPcmPoolForBus0 = [NSMutableData new];
+    }
+    
+    @synchronized (_mixerInputPcmPoolForBus1) {
+        _mixerInputPcmPoolForBus1 = [NSMutableData new];
+    }
+}
+
+- (void)setupBgmPlayer {
+    _bgmPlayer = [[UPAVPlayer alloc] initWithURL:nil];
+    _bgmPlayer.delegate = self;
+    _bgmPlayer.url = _backgroudMusicUrl;
+
 }
 
 - (void)setupAudioSession {
@@ -244,14 +289,6 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
                                   sizeof(flag_player));
     checkOSStatus(status);
     
-    _audioFormat.mSampleRate		= 44100.00;
-    _audioFormat.mFormatID			= kAudioFormatLinearPCM;
-    _audioFormat.mFormatFlags		= kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-    _audioFormat.mFramesPerPacket	= 1;
-    _audioFormat.mChannelsPerFrame	= KDefaultChannelsNum;
-    _audioFormat.mBitsPerChannel	= 16;
-    _audioFormat.mBytesPerPacket	= 2 * KDefaultChannelsNum;
-    _audioFormat.mBytesPerFrame		= 2 * KDefaultChannelsNum;
     
     status = AudioUnitSetProperty(_audioUnit,
                                   kAudioUnitProperty_StreamFormat,
@@ -310,22 +347,22 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
 }
 
 - (void)start{
-    NSLog(@"UPAudioCapture will start");
     [self setupAudioSession];
     [_audioGraph start];
     OSStatus status = AudioOutputUnitStart(_audioUnit);
     checkOSStatus(status);
-    NSLog(@"UPAudioCapture did start");
 }
 - (void)stop {
-    NSLog(@"UPAudioCapture will stop");
+    [_bgmPlayer stop];
     [_audioGraph stop];
     OSStatus status = AudioOutputUnitStop(_audioUnit);
     checkOSStatus(status);
-    NSLog(@"UPAudioCapture did stop");
 }
 
-- (void)processAudio:(AudioBufferList *)bufferList framesNum:(UInt32)framesNum timeStamp:(AudioTimeStamp *)inTimeStamp flag:(AudioUnitRenderActionFlags *)ioActionFlags {
+- (void)processAudio:(AudioBufferList *)bufferList
+           framesNum:(UInt32)framesNum
+           timeStamp:(const AudioTimeStamp *)inTimeStamp
+                flag:(AudioUnitRenderActionFlags *)ioActionFlags {
 
     AudioBuffer sourceBuffer = bufferList->mBuffers[0];
     NSData *sourcePcmData = [[NSData alloc] initWithBytes:sourceBuffer.mData length:sourceBuffer.mDataByteSize];
@@ -359,14 +396,9 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
     NSMutableData *data16 = [NSMutableData dataWithLength:numElements * sizeof(SInt16)];
     vDSP_vfix16(data.mutableBytes, 1,(SInt16 *)data16.mutableBytes,1, numElements);
     memcpy(buffer.mData, data16.mutableBytes, sourceBuffer.mDataByteSize);
-    
-    
     NSData *enPoolData = [[NSData alloc] initWithBytes:buffer.mData length:buffer.mDataByteSize];
     [self enqueuePcmDataFor:0 pcm:enPoolData];
     [_audioGraph needRenderFramesNum:framesNum timeStamp:inTimeStamp flag:ioActionFlags];
-//    if ([self.delegate respondsToSelector:@selector(didReceiveBuffer:info:)]) {
-//        [self.delegate didReceiveBuffer:buffer info:_audioFormat];
-//    }
     if (buffer.mData) {
         free(buffer.mData);
     }
@@ -400,48 +432,108 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
 }
 
 - (NSData *)dequeuePcmDataFor:(int)busIndex length:(int)len {
-    switch (busIndex) {
-        case 0:{
-            @synchronized (_mixerInputPcmPoolForBus0) {
-                NSUInteger poollen = _mixerInputPcmPoolForBus0.length;
-                if (poollen < len) {
-                    return nil;
+   __block NSData *data = nil;
+    dispatch_sync(_queue, ^{
+        switch (busIndex) {
+            case 0:{
+                @synchronized (_mixerInputPcmPoolForBus0) {
+                    NSUInteger poollen = _mixerInputPcmPoolForBus0.length;
+                    if (poollen >= len) {
+                        data = [_mixerInputPcmPoolForBus0 subdataWithRange:NSMakeRange(0, len)];
+                        NSData *dataLeft = [_mixerInputPcmPoolForBus0 subdataWithRange:NSMakeRange(len, poollen - len)];
+                        _mixerInputPcmPoolForBus0 = [[NSMutableData alloc] initWithData:dataLeft];
+                    }
                 }
-                NSData *data = [_mixerInputPcmPoolForBus0 subdataWithRange:NSMakeRange(0, len)];
-                NSData *dataLeft = [_mixerInputPcmPoolForBus0 subdataWithRange:NSMakeRange(len, poollen - len)];
-                _mixerInputPcmPoolForBus0 = [[NSMutableData alloc] initWithData:dataLeft];
-                return data;
+            }
+                break;
+            case 1:{
+                @synchronized (_mixerInputPcmPoolForBus1) {
+                    NSUInteger poollen = _mixerInputPcmPoolForBus1.length;
+                    if (poollen >= len) {
+                        data = [_mixerInputPcmPoolForBus1 subdataWithRange:NSMakeRange(0, len)];
+                        NSData *dataLeft = [_mixerInputPcmPoolForBus1 subdataWithRange:NSMakeRange(len, poollen - len)];
+                        _mixerInputPcmPoolForBus1 = [[NSMutableData alloc] initWithData:dataLeft];
+                    }
+                }
+            }
+                break;
+            default:{
+                break;
             }
         }
-            break;
-        case 1:{
-            @synchronized (_mixerInputPcmPoolForBus1) {
-                NSUInteger poollen = _mixerInputPcmPoolForBus1.length;
-                if (poollen < len) {
-                    return nil;
-                }
-                NSData *data = [_mixerInputPcmPoolForBus1 subdataWithRange:NSMakeRange(0, len)];
-                NSData *dataLeft = [_mixerInputPcmPoolForBus1 subdataWithRange:NSMakeRange(len, poollen - len)];
-                _mixerInputPcmPoolForBus1 = [[NSMutableData alloc] initWithData:dataLeft];
-                return data;
-            }
-        }
-            break;
-        default:
-            return  nil;
-            break;
-    }
-    return  nil;
+    });
+    return  data;
 }
 
 - (void)audioGraph:(UPAudioGraph *)audioGraph didOutputBuffer:(AudioBuffer)audioBuffer info:(AudioStreamBasicDescription)asbd {
-
         if ([self.delegate respondsToSelector:@selector(didReceiveBuffer:info:)]) {
             [self.delegate didReceiveBuffer:audioBuffer info:asbd];
         }
 }
 
-- (void) dealloc {
+#pragma  mark UPAVPlayerDelegate
+
+- (void)player:(UPAVPlayer *)player playerError:(NSError *)error {
+    NSLog(@"背景音乐播放错误");
+}
+
+- (void)player:(UPAVPlayer *)audioManager
+willRenderBuffer:(AudioBufferList *)audioBufferList
+     timeStamp:(const AudioTimeStamp *)inTimeStamp
+        frames:(UInt32)inNumberFrames
+          info:(AudioStreamBasicDescription)asbd
+         block:(AudioBufferListReleaseBlock)release {
+    dispatch_async(_queue, ^{
+        if(_asbdBus1Set == 0 && _backgroudMusicOn) {
+            _asbdBus1Set = 1;
+            _asbdBus1 = asbd;
+            [self audioGraphRestart];
+        }
+    });
+    
+    AudioBuffer buffer = audioBufferList->mBuffers[0];
+    NSData *enPoolData = [[NSData alloc] initWithBytes:buffer.mData length:buffer.mDataByteSize];
+    [self enqueuePcmDataFor:1 pcm:enPoolData];
+    release(audioBufferList);
+}
+
+
+- (void)audioGraphRestart {
+    dispatch_async(dispatch_get_main_queue(), ^(){
+        [_audioGraph stop];
+        [self setupAudioGraph];
+//        _audioGraph.volumeOfInputBus0 = 1;//音量设置：输入1
+//        _audioGraph.volumeOfInputBus1 = 0.1;//音量设置：输入2
+//        _audioGraph.volumeOfOutput = 1;//音量设置：输出
+        [_audioGraph start];
+    });
+}
+
+- (void)setBackgroudMusicUrl:(NSString *)url {
+    [_bgmPlayer stop];
+    _backgroudMusicUrl = url;
+}
+
+- (void)setBackgroudMusicOn:(BOOL)musicOn {
+    dispatch_sync(_queue, ^{
+        [_bgmPlayer stop];
+        _backgroudMusicOn = NO;
+        _asbdBus1Set = 0;
+        if (!_backgroudMusicUrl) {
+            return;;
+        }
+        [self setupBgmPlayer];
+        if (musicOn) {
+            [_bgmPlayer play];
+            _backgroudMusicOn = YES;
+        } else {
+            [_bgmPlayer stop];
+        }
+    });
+    [self audioGraphRestart];
+}
+
+- (void)dealloc {
     AudioUnitUninitialize(_audioUnit);
     free(_tempBuffer.mData);
 }

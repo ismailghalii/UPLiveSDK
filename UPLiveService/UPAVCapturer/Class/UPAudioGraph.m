@@ -11,37 +11,19 @@
 #import <Accelerate/Accelerate.h>
 #import <UPLiveSDK/AudioProcessor.h>
 
-
 //https://developer.apple.com/library/ios/documentation/MusicAudio/Conceptual/AudioUnitHostingGuide_iOS/AudioUnitHostingFundamentals/AudioUnitHostingFundamentals.html#//apple_ref/doc/uid/TP40009492-CH3-SW43
 #define kAUBus_0    0
 #define kAUBus_1    1
 #define kAUChannelsNum 1
 
-
-
-//static OSStatus mixerCallBack(void *inRefCon,
-//                              AudioUnitRenderActionFlags *ioActionFlags,
-//                              const AudioTimeStamp * inTimeStamp,
-//                              UInt32 inBusNumber,
-//                              UInt32 inNumberFrames,
-//                              AudioBufferList *ioData) {
-//    
-////    if ((*ioActionFlags) & kAudioUnitRenderAction_PostRender)
-////        return (ExtAudioFileWrite(extAudioFile, inNumberFrames, ioData));
-////
-//    NSLog(@"mixerCallBack");
-//    return noErr;
-//}
-//
-
 @interface UPAudioGraph()
 {
     AUGraph _audioGraph;
-    AudioUnit _mixerUnit;//混合器
-    AudioUnit _ioUnit;//录音，播放
-    AudioUnit _outputUnit;//
-    AudioStreamBasicDescription _audioFormat;
-    AudioStreamBasicDescription _audioFormat2;
+    AudioUnit _mixerUnit;
+    AudioUnit _ioUnit;
+    AudioUnit _outputUnit;
+    AudioStreamBasicDescription _audioFormat0;
+    AudioStreamBasicDescription _audioFormat1;
     AURenderCallbackStruct _mixerInputCallbackStruct;
     dispatch_queue_t _audioOutPutQueue;
     BOOL _audioGraphIsRunning;
@@ -62,7 +44,21 @@
                  withOptions:AVAudioSessionCategoryOptionMixWithOthers|AVAudioSessionCategoryOptionDefaultToSpeaker
                        error:&error];
         _audioOutPutQueue = dispatch_queue_create("UPAudioGraph_audioOutPutQueue", DISPATCH_QUEUE_SERIAL);
-
+        
+        _audioFormat0.mSampleRate		= 44100.00;
+        _audioFormat0.mFormatID			= kAudioFormatLinearPCM;
+        _audioFormat0.mFormatFlags		= kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+        _audioFormat0.mFramesPerPacket	= 1;
+        _audioFormat0.mChannelsPerFrame	= kAUChannelsNum;
+        _audioFormat0.mBitsPerChannel		= 16;
+        _audioFormat0.mBytesPerPacket		= 2 * kAUChannelsNum;
+        _audioFormat0.mBytesPerFrame		= 2 * kAUChannelsNum;
+        _audioFormat1 = _audioFormat0;
+        
+        
+        _volumeOfOutput = 1;
+        _volumeOfInputBus0 = 1;
+        _volumeOfInputBus1 = 1;
     }
     return self;
 }
@@ -72,36 +68,73 @@
     _mixerInputCallbackStruct = callbackStruct;
 }
 
-- (void)setMixerInputVolume:(UInt32)inputIndex value:(Float32)value {
 
+- (void)setVolumeOfOutput:(Float32)volumeOfOutput {
+    _volumeOfOutput = volumeOfOutput;
+    if (!_audioGraphIsRunning) {
+        return;
+    }
+    AudioUnitParameterValue newGain = volumeOfOutput;
+    OSStatus result = AudioUnitSetParameter (
+                                             _mixerUnit,
+                                             kMultiChannelMixerParam_Volume,
+                                             kAudioUnitScope_Output,
+                                             0,
+                                             newGain,
+                                             0
+                                             );
+    NSAssert(result == noErr, @"setVolumeOfOutput  failed %d",  (int)result);
 }
-- (Float32)getMixerInputVolume:(UInt32)inputIndex {
 
-    return 0;
-}
-- (void)setMixertOutputVolume:(Float32)value {
+- (void)setVolumeOfInputBus0:(Float32)volumeOfInputBus0 {
+    _volumeOfInputBus0 = volumeOfInputBus0;
+    if (!_audioGraphIsRunning) {
+        return;
+    }
 
-}
-- (Float32)getMixertOutputVolume {
-    return 0;
+    AudioUnitParameterValue newGain = volumeOfInputBus0;
+    OSStatus result = AudioUnitSetParameter (_mixerUnit,
+                                             kMultiChannelMixerParam_Volume,
+                                             kAudioUnitScope_Input,
+                                             0,
+                                             newGain,
+                                             0
+                                             );
+    
+    NSAssert(result == noErr, @"setVolumeOfInputBus0  failed %d",  (int)result);
 }
 
+- (void)setVolumeOfInputBus1:(Float32)volumeOfInputBus1 {
+    _volumeOfInputBus1 = volumeOfInputBus1;
+    if (!_audioGraphIsRunning) {
+        return;
+    }
+    AudioUnitParameterValue newGain = volumeOfInputBus1;
+    OSStatus result = AudioUnitSetParameter (_mixerUnit,
+                                             kMultiChannelMixerParam_Volume,
+                                             kAudioUnitScope_Input,
+                                             1,
+                                             newGain,
+                                             0
+                                             );
+    NSAssert(result == noErr, @"setVolumeOfInputBus1  failed %d",  (int)result);
+}
 
 - (void)start {
     dispatch_sync(_audioOutPutQueue, ^{
-        NSLog (@"_audioGraph will start");
         [self setup];
         OSStatus startStatus = AUGraphStart(_audioGraph);
         NSAssert(startStatus == noErr, @"AUGraphStart _audioGraph failed %d",  (int)startStatus);
-        NSLog (@"_audioGraph did start");
         _audioGraphIsRunning = YES;
+        [self setVolumeOfOutput:_volumeOfOutput];
+        [self setVolumeOfInputBus0:_volumeOfInputBus0];
+        [self setVolumeOfInputBus1:_volumeOfInputBus1];
     });
 }
 
 - (void)stop {
     dispatch_sync(_audioOutPutQueue, ^{
         _audioGraphIsRunning = NO;
-        NSLog (@"_audioGraph will stop");
         Boolean isRunning = false;
         OSStatus result = AUGraphIsRunning(_audioGraph, &isRunning);
         
@@ -115,34 +148,25 @@
             result = AUGraphStop(_audioGraph);
             NSAssert(result == noErr, @"AUGraphStop %d",  (int)result);
         }
-        NSLog (@"_audioGraph did stop");
     });
+}
 
+
+- (void)setMixerInputPcmInfo:(AudioStreamBasicDescription)asbd forBusIndex:(int)bus {
+    switch (bus) {
+        case 0:
+            _audioFormat0 = asbd;
+            break;
+        case 1:
+            _audioFormat1 = asbd;
+            break;
+            
+        default:
+            break;
+    }
 }
 
 - (void)setup {
-    //通用格式
-    _audioFormat.mSampleRate		= 44100.00;
-    _audioFormat.mFormatID			= kAudioFormatLinearPCM;
-    _audioFormat.mFormatFlags		= kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-    _audioFormat.mFramesPerPacket	= 1;
-    _audioFormat.mChannelsPerFrame	= kAUChannelsNum;
-    _audioFormat.mBitsPerChannel		= 16;
-    _audioFormat.mBytesPerPacket		= 2 * kAUChannelsNum;
-    _audioFormat.mBytesPerFrame		= 2 * kAUChannelsNum;
-    
-    _audioFormat2 = _audioFormat;
-//    //mixerUnit 的输出只能是双声道
-//    _audioFormat2.mSampleRate		= 44100.00;
-//    _audioFormat2.mFormatID			= kAudioFormatLinearPCM;
-//    _audioFormat2.mFormatFlags		= kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-//    _audioFormat2.mFramesPerPacket	= 1;
-//    _audioFormat2.mChannelsPerFrame	= 2;
-//    _audioFormat2.mBitsPerChannel		= 16;
-//    _audioFormat2.mBytesPerPacket		= 2 * 2;
-//    _audioFormat2.mBytesPerFrame		= 2 * 2;
-//
-
     OSStatus setupStatus;
     
     //创建和打开 _audioGraph
@@ -161,19 +185,6 @@
     int mixerNodeFlag = 0;
     int outputNodeFlag = 0;
 
-    
-    
-//    //创建 ioNode，获取_ioUnit 用于麦克风录音（或者扬声器播放）
-//    bzero(&ioUnitDescription, sizeof(AudioComponentDescription));
-//    ioUnitDescription.componentType = kAudioUnitType_Output;
-//    ioUnitDescription.componentSubType = kAudioUnitSubType_RemoteIO;
-//    ioUnitDescription.componentManufacturer = kAudioUnitManufacturer_Apple;
-//    ioUnitDescription.componentFlags = 0;
-//    ioUnitDescription.componentFlagsMask = 0;
-//    setupStatus = AUGraphAddNode(_audioGraph, &ioUnitDescription, &ioNode);
-//    ioNodeFlag = 1;
-//    NSAssert(setupStatus == noErr, @"AUGraphAddNode ioNode failed %d",  (int)setupStatus);
-    
     //创建 mixerNode，获取_mixerUnit 用于混音
     mixerUnitDescription.componentType= kAudioUnitType_Mixer;
     mixerUnitDescription.componentSubType = kAudioUnitSubType_MultiChannelMixer;
@@ -215,8 +226,6 @@
     if (outputNodeFlag) {
         setupStatus = AUGraphNodeInfo(_audioGraph, outputNode, &outputUnitDescription, &_outputUnit);
         NSAssert(setupStatus == noErr, @"AUGraphNodeInfo get ioUnit failed %d",  (int)setupStatus);
-        
-        
     }
     
     
@@ -235,24 +244,24 @@
                                            kAudioUnitProperty_StreamFormat,
                                            kAudioUnitScope_Input,
                                            kAUBus_1,
-                                           &_audioFormat,
-                                           sizeof(_audioFormat));
+                                           &_audioFormat1,
+                                           sizeof(_audioFormat1));
         NSAssert(setupStatus == noErr, @"kAudioUnitProperty_StreamFormat _mixerUnit kAudioUnitScope_Input kAUBus_1 failed %d",  (int)setupStatus);
         
         setupStatus = AudioUnitSetProperty(_mixerUnit,
                                            kAudioUnitProperty_StreamFormat,
                                            kAudioUnitScope_Input,
                                            kAUBus_0,
-                                           &_audioFormat,
-                                           sizeof(_audioFormat));
+                                           &_audioFormat0,
+                                           sizeof(_audioFormat0));
         NSAssert(setupStatus == noErr, @"kAudioUnitProperty_StreamFormat _mixerUnit kAudioUnitScope_Input kAUBus_0 failed %d",  (int)setupStatus);
         
         setupStatus = AudioUnitSetProperty(_mixerUnit,
                                            kAudioUnitProperty_StreamFormat,
                                            kAudioUnitScope_Output,
                                            kAUBus_0,
-                                           &_audioFormat2,
-                                           sizeof(_audioFormat2));
+                                           &_audioFormat0,
+                                           sizeof(_audioFormat0));
         NSAssert(setupStatus == noErr, @"kAudioUnitProperty_StreamFormat kAudioUnitScope_Output _mixerUnit  kAUBus_0 failed %d",  (int)setupStatus);
         
         
@@ -270,8 +279,8 @@
                                            kAudioUnitProperty_StreamFormat,
                                            kAudioUnitScope_Input,
                                            kAUBus_0,
-                                           &_audioFormat2,
-                                           sizeof(_audioFormat2));
+                                           &_audioFormat0,
+                                           sizeof(_audioFormat0));
         NSAssert(setupStatus == noErr, @"kAudioUnitProperty_StreamFormat _outputUnit kAudioUnitScope_Input kAUBus_0 failed %d",  (int)setupStatus);
         
         
@@ -279,8 +288,8 @@
                                            kAudioUnitProperty_StreamFormat,
                                            kAudioUnitScope_Output,
                                            kAUBus_0,
-                                           &_audioFormat,
-                                           sizeof(_audioFormat));
+                                           &_audioFormat0,
+                                           sizeof(_audioFormat0));
         NSAssert(setupStatus == noErr, @"kAudioUnitProperty_StreamFormat  _outputUnit kAudioUnitScope_Output  kAUBus_0 failed %d",  (int)setupStatus);
         
     }
@@ -314,8 +323,8 @@
                                            kAudioUnitProperty_StreamFormat,
                                            kAudioUnitScope_Output,
                                            kAUBus_1,
-                                           &_audioFormat,
-                                           sizeof(_audioFormat));
+                                           &_audioFormat0,
+                                           sizeof(_audioFormat0));
         NSAssert(setupStatus == noErr, @"kAudioUnitProperty_StreamFormat _ioUnit  kAUBus_1 failed %d",  (int)setupStatus);
         
         
@@ -323,18 +332,18 @@
                                            kAudioUnitProperty_StreamFormat,
                                            kAudioUnitScope_Input,
                                            kAUBus_0,
-                                           &_audioFormat,
-                                           sizeof(_audioFormat));
+                                           &_audioFormat0,
+                                           sizeof(_audioFormat0));
         NSAssert(setupStatus == noErr, @"kAudioUnitProperty_StreamFormat _ioUnit  kAUBus_0 failed %d",  (int)setupStatus);
     }
     
     setupStatus = AUGraphInitialize(_audioGraph);
     NSAssert(setupStatus == noErr, @"AUGraphInitialize _audioGraph  failed %d",  (int)setupStatus);
-    CAShow(_audioGraph);
+    //CAShow(_audioGraph);
 }
 
 - (void)needRenderFramesNum:(UInt32)framesNum
-                  timeStamp:(AudioTimeStamp *)inTimeStamp
+                  timeStamp:(const AudioTimeStamp *)inTimeStamp
                        flag:(AudioUnitRenderActionFlags *)ioActionFlags {
 
     dispatch_async(_audioOutPutQueue, ^{
@@ -360,14 +369,14 @@
         
         NSAssert(error == noErr, @"UPAudioGraph AudioUnitRender failed %d",  (int)error);
         if (self.delegate) {
-            [self.delegate audioGraph:self didOutputBuffer:buffer info:_audioFormat];
+            [self.delegate audioGraph:self didOutputBuffer:buffer info:_audioFormat0];
         }
         free(buffer.mData);
     });
 }
 
 - (void)dealloc {
-    NSLog(@"dealloc %@", self);
+//    NSLog(@"dealloc %@", self);
 }
 
 @end

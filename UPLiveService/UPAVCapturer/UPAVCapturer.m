@@ -174,8 +174,8 @@
     _capturerStatus = capturerStatus;
     //代理方式回调采集器状态
     dispatch_async(dispatch_get_main_queue(), ^(){
-        if ([self.delegate respondsToSelector:@selector(UPAVCapturer:capturerStatusDidChange:)]) {
-            [self.delegate UPAVCapturer:self capturerStatusDidChange:_capturerStatus];
+        if ([self.delegate respondsToSelector:@selector(capturer:capturerStatusDidChange:)]) {
+            [self.delegate capturer:self capturerStatusDidChange:_capturerStatus];
         }
         
         switch (_capturerStatus) {
@@ -185,8 +185,8 @@
                 break;
             case UPAVCapturerStatusError: {
                 [self stop];
-                if ([self.delegate respondsToSelector:@selector(UPAVCapturer:capturerError:)]) {
-                    [self.delegate UPAVCapturer:self capturerError:_capturerError];
+                if ([self.delegate respondsToSelector:@selector(capturer:capturerError:)]) {
+                    [self.delegate capturer:self capturerError:_capturerError];
                 }
             }
                 break;
@@ -204,8 +204,8 @@
     _pushStreamStatus = pushStreamStatus;
     
     dispatch_async(dispatch_get_main_queue(), ^(){
-        if ([self.delegate respondsToSelector:@selector(UPAVCapturer:pushStreamStatusDidChange:)]) {
-            [self.delegate UPAVCapturer:self pushStreamStatusDidChange:_pushStreamStatus];
+        if ([self.delegate respondsToSelector:@selector(capturer:pushStreamStatusDidChange:)]) {
+            [self.delegate capturer:self pushStreamStatusDidChange:_pushStreamStatus];
         }
         
         switch (_pushStreamStatus) {
@@ -264,9 +264,9 @@
         return;
     }
     _camaraPosition = camaraPosition;
-    if (self.capturerStatus == UPAVCapturerStatusLiving) {
-        [_upVideoCapture setCamaraPosition:camaraPosition];
-    }
+
+    [_upVideoCapture setCamaraPosition:camaraPosition];
+    
 }
 
 - (void)setCapturerPresetLevelFrameCropRect:(CGSize)capturerPresetLevelFrameCropRect {
@@ -311,7 +311,6 @@
 - (void)setNetworkSateBlock:(NetworkStateBlock)networkSateBlock {
     dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
     _networkStateTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
-    NSLog(@"==============================");
     dispatch_time_t startTime = dispatch_time(DISPATCH_TIME_NOW, 6 * NSEC_PER_SEC);
     dispatch_source_set_timer(_networkStateTimer, startTime, 1 * NSEC_PER_SEC, 0);
     dispatch_source_set_event_handler(_networkStateTimer, ^{
@@ -328,7 +327,23 @@
             }
         }
     });
+}
 
+
+- (NSString *)backgroudMusicUrl{
+    return self.audioUnitRecorder.backgroudMusicUrl;
+}
+
+- (void)setBackgroudMusicUrl:(NSString *)backgroudMusicUrl {
+    self.audioUnitRecorder.backgroudMusicUrl = backgroudMusicUrl;
+}
+
+- (void)setBackgroudMusicOn:(BOOL)backgroudMusicOn {
+    self.audioUnitRecorder.backgroudMusicOn = backgroudMusicOn;
+}
+
+- (BOOL)backgroudMusicOn {
+    return  self.audioUnitRecorder.backgroudMusicOn;
 }
 
 - (CGFloat)fpsCapture {
@@ -397,8 +412,6 @@
 }
 
 #pragma mark-- filter 滤镜
-
-
 - (void)setFilter:(GPUImageOutput<GPUImageInput> *)filter {
     [_upVideoCapture setFilter:filter];
 }
@@ -417,7 +430,7 @@
 
 #pragma mark UPAVStreamerDelegate
 
-- (void)UPAVStreamer:(UPAVStreamer *)streamer statusDidChange:(UPAVStreamerStatus)status error:(NSError *)error {
+- (void)streamer:(UPAVStreamer *)streamer statusDidChange:(UPAVStreamerStatus)status error:(NSError *)error {
     
     switch (status) {
         case UPAVStreamerStatusConnecting: {
@@ -442,8 +455,13 @@
             _capturerError = error;
             self.pushStreamStatus = UPPushAVStreamStatusError;
         }
+            break;
         case UPAVStreamerStatusClosed: {
             self.pushStreamStatus = UPPushAVStreamStatusClosed;
+        }
+            break;
+            
+        case UPAVStreamerStatusIdle: {
         }
             break;
     }
@@ -464,10 +482,12 @@
 
 - (void)applicationDidResignActive:(NSNotification *)notification {
     _applicationActive = NO;
+    [_upVideoCapture.videoCamera pauseCameraCapture];
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)notification {
     _applicationActive = YES;
+    [_upVideoCapture.videoCamera resumeCameraCapture];
 }
 
 #pragma mark backgroud push frame loop

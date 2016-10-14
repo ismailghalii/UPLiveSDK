@@ -29,7 +29,8 @@ typedef NS_ENUM(NSInteger, UPAVStreamerAudioType) {
 
 @class UPAVStreamer;
 @protocol UPAVStreamerDelegate <NSObject>
-- (void)UPAVStreamer:(UPAVStreamer *)streamer statusDidChange:(UPAVStreamerStatus)status error:(NSError *)error;
+@required
+- (void)streamer:(UPAVStreamer *)streamer statusDidChange:(UPAVStreamerStatus)status error:(NSError *)error;
 @end
 
 

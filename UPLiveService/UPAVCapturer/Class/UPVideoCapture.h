@@ -69,6 +69,7 @@ typedef NS_ENUM(NSInteger, UPAVCapturerPresetLevel) {
 
 
 @interface UPVideoCapture : NSObject
+@property (nonatomic, strong) GPUImageVideoCamera *videoCamera;
 @property (nonatomic, weak) id<UPVideoCaptureProtocol> delegate;
 
 @property (nonatomic, strong) NSString *outStreamPath;

@@ -47,13 +47,15 @@ typedef void(^NetworkStateBlock)(int level);
 @protocol UPAVCapturerDelegate <NSObject>
 
 /// 采集状态回调
-- (void)UPAVCapturer:(UPAVCapturer *)capturer capturerStatusDidChange:(UPAVCapturerStatus)capturerStatus;
+@optional
+- (void)capturer:(UPAVCapturer *)capturer capturerStatusDidChange:(UPAVCapturerStatus)capturerStatus;
 /// 错误回调
 @required
-- (void)UPAVCapturer:(UPAVCapturer *)capturer capturerError:(NSError *)error;
+- (void)capturer:(UPAVCapturer *)capturer capturerError:(NSError *)error;
 
 /// 推流状态回调
-- (void)UPAVCapturer:(UPAVCapturer *)capturer pushStreamStatusDidChange:(UPPushAVStreamStatus)streamStatus;
+@optional
+- (void)capturer:(UPAVCapturer *)capturer pushStreamStatusDidChange:(UPPushAVStreamStatus)streamStatus;
 @end
 
 
@@ -96,6 +98,7 @@ typedef void(^NetworkStateBlock)(int level);
 + (UPAVCapturer *)sharedInstance;
 - (void)start;
 - (void)stop;
+
 - (UIView *)previewWithFrame:(CGRect)frame contentMode:(UIViewContentMode)mode;
 /// 设置水印和动态处理的 block
 - (void)setWatermarkView:(UIView *)watermarkView Block:(WatermarkBlock)block;
@@ -126,6 +129,15 @@ typedef void(^NetworkStateBlock)(int level);
 - (void)setFilters:(NSArray *)filters;
 /// 多个滤镜 用户可以使用已定义滤镜 filterNames: 已定义滤镜的数组, 按照先后顺序加入滤镜链
 - (void)setFilterNames:(NSArray *)filterNames;
+
+
+////混音功能－背景音设置开关
+//- (void)setBackgroudMusicUrl:(NSString *)url;
+//- (void)setBackgroudMusicOn:(BOOL)musicOn;
+
+
+@property (nonatomic, strong) NSString *backgroudMusicUrl;
+@property (nonatomic) BOOL backgroudMusicOn;
 
 
 

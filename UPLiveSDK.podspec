@@ -11,7 +11,7 @@ s.ios.deployment_target = '8.0'
 # s.source_files = ['UPLiveService/**/*.{h,m}', 'UpYunSDK/Utils/**/*.{h,m}']
 s.resources = [ 'UPLiveService/UPAVCapturer/Class/*.{jpg,png,xib}', 'UPLiveService/UPAVCapturer/ImageProcessor/**/**/*.{jpg,png,xib}']
 
-s.source_files = ['UPLiveService/**/*.{h,m}', 'UPLiveService/**/**/*.{h,m}', 'UPLiveService/**/**/**/*.{h,m}', 'UPLiveService/**/**/**/**/*.{h,m}']
+s.source_files = ['UPLiveService/**/*.{h,m}', 'UPLiveService/**/**/*.{h,m}', 'UPLiveService/**/**/**/*.{h,m}']
 s.pod_target_xcconfig = { 'OTHER_LDFLAGS' => '-read_only_relocs suppress' }
 s.frameworks = 'AVFoundation', 'QuartzCore', 'OpenGLES', 'AudioToolbox', 'VideoToolbox', 'Accelerate'
 s.libraries  = 'bz2.1.0', 'iconv', 'z'
