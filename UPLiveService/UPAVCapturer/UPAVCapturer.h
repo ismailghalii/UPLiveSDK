@@ -76,7 +76,7 @@ typedef void(^NetworkStateBlock)(int level);
 @property (nonatomic) BOOL camaraTorchOn;
 /// 滤镜开关
 @property (nonatomic) BOOL filterOn;
-/// The torch control camera zoom scale default 1.0, between 1.0 ~ 3.0
+/// camera zoom scale default 1.0, between 1.0 ~ 3.0
 @property (nonatomic, assign) CGFloat viewZoomScale;
 
 @property (nonatomic, weak) id<UPAVCapturerDelegate> delegate;
@@ -87,7 +87,7 @@ typedef void(^NetworkStateBlock)(int level);
 @property (nonatomic) BOOL audioOnly;
 /// 静音推流，默认值 NO
 @property (nonatomic) BOOL audioMute;
-/// 音量增益
+/// 音量增益, 默认值 100 即原声音量
 @property (nonatomic) int increaserRate;
 /// 消除噪音
 @property (nonatomic) BOOL deNoise;
@@ -130,14 +130,9 @@ typedef void(^NetworkStateBlock)(int level);
 /// 多个滤镜 用户可以使用已定义滤镜 filterNames: 已定义滤镜的数组, 按照先后顺序加入滤镜链
 - (void)setFilterNames:(NSArray *)filterNames;
 
-
-////混音功能－背景音设置开关
-//- (void)setBackgroudMusicUrl:(NSString *)url;
-//- (void)setBackgroudMusicOn:(BOOL)musicOn;
-
-
 @property (nonatomic, strong) NSString *backgroudMusicUrl;
 @property (nonatomic) BOOL backgroudMusicOn;
+@property (nonatomic, assign) Float32 backgroudMusicVolume;// 默认值为 1 即原声音量
 
 
 

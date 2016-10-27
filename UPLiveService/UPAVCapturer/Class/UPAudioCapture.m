@@ -238,6 +238,14 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
 
 }
 
+- (void)setBackgroudMusicVolume:(Float32)backgroudMusicVolume {
+        _audioGraph.volumeOfInputBus1 = backgroudMusicVolume;
+}
+
+- (Float32)backgroudMusicVolume {
+    return _audioGraph.volumeOfInputBus1;
+}
+
 - (void)setupAudioSession {
     AVAudioSession *session = [AVAudioSession sharedInstance];
     NSError *error = nil;

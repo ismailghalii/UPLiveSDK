@@ -35,5 +35,7 @@ typedef NS_ENUM(NSInteger, UPAudioUnitCategory) {
 
 @property (nonatomic, strong) NSString *backgroudMusicUrl;
 @property (nonatomic) BOOL backgroudMusicOn;
+@property (nonatomic, assign) Float32 backgroudMusicVolume;// 默认值为 1 即原声音量
+
 
 @end

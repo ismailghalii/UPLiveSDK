@@ -60,6 +60,7 @@ typedef NS_ENUM(NSInteger, UPCustomFilter) {
 typedef NS_ENUM(NSInteger, UPAVCapturerPresetLevel) {
     UPAVCapturerPreset_480x360,
     UPAVCapturerPreset_640x480,
+    UPAVCapturerPreset_960x540,
     UPAVCapturerPreset_1280x720
 };
 

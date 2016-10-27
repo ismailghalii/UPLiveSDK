@@ -373,6 +373,11 @@
             presetHeight = 480;
             break;
         }
+        case UPAVCapturerPreset_960x540:{
+            presetWidth = 960;
+            presetHeight = 540;
+            break;
+        }
         case UPAVCapturerPreset_1280x720:{
             presetWidth = 1280;
             presetHeight = 720;
@@ -421,6 +426,10 @@
         }
         case UPAVCapturerPreset_640x480:{
             _sessionPreset = AVCaptureSessionPreset640x480;
+            break;
+        }
+        case UPAVCapturerPreset_960x540:{
+            _sessionPreset = AVCaptureSessionPresetiFrame960x540;
             break;
         }
         case UPAVCapturerPreset_1280x720:{

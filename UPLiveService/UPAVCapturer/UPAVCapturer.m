@@ -38,6 +38,11 @@
 @property (nonatomic) dispatch_source_t networkStateTimer;
 @property (nonatomic, assign) int networkLevel;
 
+
+@property (nonatomic, assign) NSTimeInterval startReconnectTimeInterval;
+@property (nonatomic, strong) NSTimer *delayTimer;
+@property (nonatomic, assign) int timeSec;
+@property (nonatomic, assign) int reconnectCount;
 @end
 
 
@@ -140,6 +145,10 @@
         _upVideoCapture = [[UPVideoCapture alloc]init];
         _upVideoCapture.delegate = self;
         [self addNotifications];
+        
+        _timeSec = 30;
+        _reconnectCount = 0;
+        
     }
     return self;
 }
@@ -219,12 +228,16 @@
                 break;
             case UPPushAVStreamStatusError: {
                 //失败重连尝试三次
+                if (_reconnectCount == 0) {
+                    [self reconnectTimes];
+                }
                 self.pushStreamReconnectCount = self.pushStreamReconnectCount + 1;
                 NSString *message = [NSString stringWithFormat:@"UPAVPacketManagerStatusStreamWriteError %@, reconnect %d times", _capturerError, self.pushStreamReconnectCount];
                 
                 NSLog(@"%@",message);
                 
-                if (self.pushStreamReconnectCount < 3) {
+                if (self.pushStreamReconnectCount < 3 && _reconnectCount < 20) {
+                    _reconnectCount++;
                     [_rtmpStreamer reconnect];
                     return ;
                 } else {
@@ -291,6 +304,10 @@
             _bitrate = 600000;
             break;
         }
+        case UPAVCapturerPreset_960x540:{
+            _bitrate = 900000;
+            break;
+        }
         case UPAVCapturerPreset_1280x720:{
             _bitrate = 1200000;
             break;
@@ -327,6 +344,8 @@
             }
         }
     });
+    
+    dispatch_resume(_networkStateTimer);
 }
 
 
@@ -360,6 +379,14 @@
     _audioUnitRecorder.deNoise = deNoise;
 }
 
+- (void)setBackgroudMusicVolume:(Float32)backgroudMusicVolume {
+    _audioUnitRecorder.backgroudMusicVolume = backgroudMusicVolume;
+}
+
+- (Float32)backgroudMusicVolume {
+    return _audioUnitRecorder.backgroudMusicVolume;
+}
+
 - (UIView *)previewWithFrame:(CGRect)frame contentMode:(UIViewContentMode)mode {
     return [_upVideoCapture previewWithFrame:frame contentMode:mode];
 }
@@ -385,6 +412,15 @@
         _rtmpStreamer = nil;
     });
     [[UIApplication sharedApplication] setIdleTimerDisabled:NO];
+    if (_networkStateTimer) {
+        dispatch_source_cancel(_networkStateTimer);
+    }
+    _reconnectCount = 0;
+    if (_delayTimer) {
+        [_delayTimer invalidate];
+        _delayTimer = nil;
+    }
+    
 }
 
 - (void)dealloc {
@@ -539,6 +575,21 @@
         }
         [_rtmpStreamer pushAudioBuffer:audioBuffer info:asbd];
     });
+}
+
+- (void)reconnectTimes {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (_delayTimer) {
+            [_delayTimer invalidate];
+            _delayTimer = nil;
+        }
+        _delayTimer = [NSTimer scheduledTimerWithTimeInterval:_timeSec target:self selector:@selector(afterTimes) userInfo:nil repeats:NO];
+    });
+}
+
+- (void)afterTimes {
+//    NSLog(@"重置 重连次数 %d", _reconnectCount);
+    _reconnectCount = 0;
 }
 
 #pragma mark upyun token
