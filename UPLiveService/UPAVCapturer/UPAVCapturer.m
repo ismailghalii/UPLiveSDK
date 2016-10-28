@@ -154,6 +154,7 @@
 }
 
 - (void)addNotifications {
+#ifndef UPYUN_APP_EXTENSIONS
     NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
     [notificationCenter addObserver:self
                            selector:@selector(applicationDidResignActive:)
@@ -164,6 +165,8 @@
                            selector:@selector(applicationDidBecomeActive:)
                                name:UIApplicationDidBecomeActiveNotification
                              object:[UIApplication sharedApplication]];
+
+#endif
 }
 
 - (void)removeNotifications {
@@ -400,7 +403,11 @@
     [_upVideoCapture start];
     [_audioUnitRecorder start];
     self.capturerStatus = UPAVCapturerStatusLiving;
+    
+#ifndef UPYUN_APP_EXTENSIONS
     [[UIApplication sharedApplication] setIdleTimerDisabled:YES];
+#endif
+    
 }
 
 - (void)stop {
@@ -411,7 +418,9 @@
         [_rtmpStreamer stop];
         _rtmpStreamer = nil;
     });
+#ifndef UPYUN_APP_EXTENSIONS
     [[UIApplication sharedApplication] setIdleTimerDisabled:NO];
+#endif
     if (_networkStateTimer) {
         dispatch_source_cancel(_networkStateTimer);
     }

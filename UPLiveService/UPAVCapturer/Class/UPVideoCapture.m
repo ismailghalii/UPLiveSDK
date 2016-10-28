@@ -464,10 +464,11 @@
     _previewContentMode = mode;
     _preview = [[UIView alloc] initWithFrame:frame];
     _preview.frame = frame;
-    
+    _previewOrientation = UIInterfaceOrientationPortrait;
+#ifndef UPYUN_APP_EXTENSIONS
     //记录preview的UI方向，如果UI方向和拍摄方向不一致时候，拍摄画面需要旋转
     _previewOrientation = [[UIApplication sharedApplication] statusBarOrientation];
-    
+#endif
     [self preViewAddTapGesture];
     return _preview;
 }
@@ -484,14 +485,18 @@
     [self.videoCamera stopCameraCapture];
     [self gpuImageCameraSetup];
     [self.videoCamera startCameraCapture];
+#ifndef UPYUN_APP_EXTENSIONS
     [[UIApplication sharedApplication] setIdleTimerDisabled:YES];
+#endif
 }
 
 - (void)stop {
     [self cleanFilters];
     [self.videoCamera stopCameraCapture];
     [self previewRemoveGpuImageView];
+#ifndef UPYUN_APP_EXTENSIONS
     [[UIApplication sharedApplication] setIdleTimerDisabled:NO];
+#endif
 }
 
 - (void)restart {
@@ -777,6 +782,7 @@
 }
 
 - (void)addNotifications {
+#ifndef UPYUN_APP_EXTENSIONS
     NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
     [notificationCenter addObserver:self
                            selector:@selector(applicationWillResignActive:)
@@ -787,6 +793,7 @@
                            selector:@selector(applicationDidBecomeActive:)
                                name:UIApplicationDidBecomeActiveNotification
                              object:[UIApplication sharedApplication]];
+#endif
 }
 
 
