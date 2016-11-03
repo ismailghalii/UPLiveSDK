@@ -176,16 +176,16 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
 @implementation UPAudioCapture
 
 
-- (id)initWith:(UPAudioUnitCategory)category {
+- (id)initWith:(UPAudioUnitCategory)category samplerate:(int)samplerate {
+    
     self = [super init];
     if (self) {
         [self setupAudioSession];
-        _pcmProcessor = [[AudioProcessor alloc] initWithNoiseSuppress:-7 samplerate:44100];
+        _pcmProcessor = [[AudioProcessor alloc] initWithNoiseSuppress:-7 samplerate:samplerate];
         _mixerInputPcmPoolForBus0 = [NSMutableData new];
         _mixerInputPcmPoolForBus1 = [NSMutableData new];
-        
         //默认音频采集格式
-        _audioFormat.mSampleRate		= 44100.00;
+        _audioFormat.mSampleRate		= samplerate;
         _audioFormat.mFormatID			= kAudioFormatLinearPCM;
         _audioFormat.mFormatFlags		= kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
         _audioFormat.mFramesPerPacket	= 1;
@@ -205,6 +205,10 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
         [self setupAudioGraph];
     }
     return self;
+}
+
+- (id)initWith:(UPAudioUnitCategory)category {
+    return  [self initWith:category samplerate:44100];
 }
 
 - (void)setupAudioGraph {

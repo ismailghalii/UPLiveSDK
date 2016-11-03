@@ -77,7 +77,7 @@ typedef NS_ENUM(NSInteger, UPAVCapturerPresetLevel) {
 @property (nonatomic) AVCaptureDevicePosition camaraPosition;
 @property (nonatomic) AVCaptureVideoOrientation videoOrientation;
 @property (nonatomic) UPAVCapturerPresetLevel capturerPresetLevel;
-@property (nonatomic) CGSize capturerPresetLevelFrameCropRect;
+@property (nonatomic) CGSize capturerPresetLevelFrameCropSize;
 @property (nonatomic) CGSize capturerPresetLevelFrameScaleSize;
 @property (nonatomic) int32_t fps;//设置采集帧频
 @property (nonatomic) BOOL streamingOn;//默认为 YES，即 UPAVCapturer start 之后会立即推流直播;

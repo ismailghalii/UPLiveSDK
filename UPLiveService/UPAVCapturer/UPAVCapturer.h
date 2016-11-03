@@ -9,10 +9,11 @@
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
+#import <UPLiveSDK/UPAVStreamer.h>
 #import "UPAudioCapture.h"
 #import "UPVideoCapture.h"
-
 #import "GPUImage.h"
+
 
 typedef NS_ENUM(NSInteger, UPAVCapturerStatus) {
     UPAVCapturerStatusStopped,
@@ -29,7 +30,7 @@ typedef NS_ENUM(NSInteger, UPPushAVStreamStatus) {
 };
 
 
-typedef void(^NetworkStateBlock)(int level);
+typedef void(^NetworkStateBlock)(UPAVStreamerNetworkState level);
 
 @interface UPAVCapturerDashboard: NSObject
 @property (nonatomic, readonly) float fps_capturer;
@@ -64,8 +65,9 @@ typedef void(^NetworkStateBlock)(int level);
 @property (nonatomic, strong) NSString *outStreamPath;
 @property (nonatomic) AVCaptureDevicePosition camaraPosition;
 @property (nonatomic) AVCaptureVideoOrientation videoOrientation;
+/// 采集等级
 @property (nonatomic) UPAVCapturerPresetLevel capturerPresetLevel;
-@property (nonatomic) CGSize capturerPresetLevelFrameCropRect;
+@property (nonatomic) CGSize capturerPresetLevelFrameCropSize;
 /// 设置采集帧频
 @property (nonatomic) int32_t fps;
 /// 设置目标推流比特率
@@ -93,15 +95,35 @@ typedef void(^NetworkStateBlock)(int level);
 @property (nonatomic) BOOL deNoise;
 /// 网络状态回调
 @property (nonatomic, copy) NetworkStateBlock networkSateBlock;
-
+/// 背景音url
+@property (nonatomic, strong) NSString *backgroudMusicUrl;
+/// 背景音开关
+@property (nonatomic) BOOL backgroudMusicOn;
+/// 背景音量默认值为 1， 即原声音量
+@property (nonatomic, assign) Float32 backgroudMusicVolume;
+/// 动态码率
+@property (nonatomic, assign) BOOL openDynamicBitrate;
 
 + (UPAVCapturer *)sharedInstance;
+- (UIView *)previewWithFrame:(CGRect)frame contentMode:(UIViewContentMode)mode;
 - (void)start;
 - (void)stop;
 
-- (UIView *)previewWithFrame:(CGRect)frame contentMode:(UIViewContentMode)mode;
+/// 连麦开启和关闭
+- (void)rtcConnect:(NSString *)channelId;
+- (void)rtcClose;
+
 /// 设置水印和动态处理的 block
 - (void)setWatermarkView:(UIView *)watermarkView Block:(WatermarkBlock)block;
+
+/// 单个滤镜 用户可以使用自定义滤镜
+- (void)setFilter:(GPUImageOutput<GPUImageInput> *)filter;
+/// 单个滤镜 用户可以使用已定义好的滤镜名字
+- (void)setFilterName:(UPCustomFilter)filterName;
+/// 多个滤镜 用户可以使用自定义滤镜 filters : 自定义滤镜数组 按照先后顺序加入滤镜链
+- (void)setFilters:(NSArray *)filters;
+/// 多个滤镜 用户可以使用已定义滤镜 filterNames: 已定义滤镜的数组, 按照先后顺序加入滤镜链
+- (void)setFilterNames:(NSArray *)filterNames;
 
 
 
@@ -117,23 +139,7 @@ typedef void(^NetworkStateBlock)(int level);
                     bucket:(NSString *)bucket //空间名
                 expiration:(int)expiration //token 过期时间
            applicationName:(NSString *)appName //应用名，比如示例推流地址中的 live
-                streamName:(NSString *)streamName; //流名， 比如示例推流地址中的 abc
-
-
-/// 单个滤镜 用户可以使用自定义滤镜
-- (void)setFilter:(GPUImageOutput<GPUImageInput> *)filter;
-/// 单个滤镜 用户可以使用已定义好的滤镜名字
-- (void)setFilterName:(UPCustomFilter)filterName;
-
-/// 多个滤镜 用户可以使用自定义滤镜 filters : 自定义滤镜数组 按照先后顺序加入滤镜链
-- (void)setFilters:(NSArray *)filters;
-/// 多个滤镜 用户可以使用已定义滤镜 filterNames: 已定义滤镜的数组, 按照先后顺序加入滤镜链
-- (void)setFilterNames:(NSArray *)filterNames;
-
-@property (nonatomic, strong) NSString *backgroudMusicUrl;
-@property (nonatomic) BOOL backgroudMusicOn;
-@property (nonatomic, assign) Float32 backgroudMusicVolume;// 默认值为 1 即原声音量
-
+                streamName:(NSString *)streamName; //流名， 比如示例推流地址中的 abcÏ
 
 
 @end

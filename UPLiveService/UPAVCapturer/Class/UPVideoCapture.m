@@ -28,7 +28,7 @@
     UIViewContentMode _previewContentMode;
     
     //video size, capture size
-    CGSize _capturerPresetLevelFrameCropRect;
+    CGSize _capturerPresetLevelFrameCropSize;
     CGSize _presetVideoFrameRect;
     
     //camera focus
@@ -68,7 +68,7 @@
         _camaraPosition = AVCaptureDevicePositionBack;
         _videoOrientation = AVCaptureVideoOrientationPortrait;
         self.capturerPresetLevel = UPAVCapturerPreset_640x480;
-        _capturerPresetLevelFrameCropRect = CGSizeZero;
+        _capturerPresetLevelFrameCropSize = CGSizeZero;
         _fps = 24;
         _viewZoomScale = 1;
         _filterOn = NO;
@@ -136,8 +136,8 @@
 
     //视频尺寸剪裁
 
-    CGFloat cropW = _capturerPresetLevelFrameCropRect.width / _presetVideoFrameRect.width;
-    CGFloat cropH = _capturerPresetLevelFrameCropRect.height / _presetVideoFrameRect.height;
+    CGFloat cropW = _capturerPresetLevelFrameCropSize.width / _presetVideoFrameRect.width;
+    CGFloat cropH = _capturerPresetLevelFrameCropSize.height / _presetVideoFrameRect.height;
     _cropfilter = [[GPUImageCropFilter alloc] initWithCropRegion:CGRectMake(0.0, 0.0, cropW, cropH)];
     
     
@@ -265,8 +265,28 @@
     [_nFilter setFrameProcessingCompletionBlock:^(GPUImageOutput *outPut, CMTime time) {
         GPUImageFramebuffer *imageFramebuffer = outPut.framebufferForOutput;
         CVPixelBufferRef pixelBuffer = [imageFramebuffer pixelBuffer];
+        
+        size_t width_o = CVPixelBufferGetWidth(pixelBuffer);
+        size_t height_o = CVPixelBufferGetHeight(pixelBuffer);
+        OSType format_o = CVPixelBufferGetPixelFormatType(pixelBuffer);
+
+        CVPixelBufferRef pixelBuffer_c;
+        CVPixelBufferCreate(nil, width_o, height_o, format_o, nil, &pixelBuffer_c);
+       
+        CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+        CVPixelBufferLockBaseAddress(pixelBuffer_c, 0);
+        void *baseAddress_o = CVPixelBufferGetBaseAddress(pixelBuffer);
+        size_t dataSize_o = CVPixelBufferGetDataSize(pixelBuffer);
+        void *target = CVPixelBufferGetBaseAddress(pixelBuffer_c);
+        memcpy(target, baseAddress_o, dataSize_o);
+        
+        //int bytesPerRow = (int)CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0);
+
+        CVPixelBufferUnlockBaseAddress(pixelBuffer_c, 0);
+        CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+        
         if (weakself.delegate) {
-            [weakself.delegate didCapturePixelBuffer:pixelBuffer];
+            [weakself.delegate didCapturePixelBuffer:pixelBuffer_c];
         }
     }];
 }
@@ -395,29 +415,29 @@
     if (cropRect.width > presetWidth
         || cropRect.height > presetHeight) {
         //超出范围，设置不成功；
-        _capturerPresetLevelFrameCropRect = _presetVideoFrameRect;
+        _capturerPresetLevelFrameCropSize = _presetVideoFrameRect;
     } else {
-        _capturerPresetLevelFrameCropRect = cropRect;
+        _capturerPresetLevelFrameCropSize = cropRect;
     }
     
-    if (_capturerPresetLevelFrameCropRect.width * _capturerPresetLevelFrameCropRect.height == 0) {
+    if (_capturerPresetLevelFrameCropSize.width * _capturerPresetLevelFrameCropSize.height == 0) {
         //大小为0，设置不成功；
-        _capturerPresetLevelFrameCropRect = _presetVideoFrameRect;
+        _capturerPresetLevelFrameCropSize = _presetVideoFrameRect;
     }
 }
 
-- (void)setCapturerPresetLevelFrameCropRect:(CGSize)capturerPresetLevelFrameCropRect {
-    [self resetCapturerPresetLevelFrameSizeWithCropRect:capturerPresetLevelFrameCropRect];
+- (void)setCapturerPresetLevelFrameCropRect:(CGSize)capturerPresetLevelFrameCropSize {
+    [self resetCapturerPresetLevelFrameSizeWithCropRect:capturerPresetLevelFrameCropSize];
 }
 
 - (void)setVideoOrientation:(AVCaptureVideoOrientation)videoOrientation {
     _videoOrientation = videoOrientation;
-    [self resetCapturerPresetLevelFrameSizeWithCropRect:_capturerPresetLevelFrameCropRect];
+    [self resetCapturerPresetLevelFrameSizeWithCropRect:_capturerPresetLevelFrameCropSize];
 }
 
 - (void)setCapturerPresetLevel:(UPAVCapturerPresetLevel)capturerPresetLevel {
     _capturerPresetLevel = capturerPresetLevel;
-    [self resetCapturerPresetLevelFrameSizeWithCropRect:_capturerPresetLevelFrameCropRect];
+    [self resetCapturerPresetLevelFrameSizeWithCropRect:_capturerPresetLevelFrameCropSize];
     
     switch (_capturerPresetLevel) {
         case UPAVCapturerPreset_480x360:{
@@ -464,10 +484,11 @@
     _previewContentMode = mode;
     _preview = [[UIView alloc] initWithFrame:frame];
     _preview.frame = frame;
-    
+    _previewOrientation = UIInterfaceOrientationPortrait;
+#ifndef UPYUN_APP_EXTENSIONS
     //记录preview的UI方向，如果UI方向和拍摄方向不一致时候，拍摄画面需要旋转
     _previewOrientation = [[UIApplication sharedApplication] statusBarOrientation];
-    
+#endif
     [self preViewAddTapGesture];
     return _preview;
 }
@@ -484,14 +505,18 @@
     [self.videoCamera stopCameraCapture];
     [self gpuImageCameraSetup];
     [self.videoCamera startCameraCapture];
+#ifndef UPYUN_APP_EXTENSIONS
     [[UIApplication sharedApplication] setIdleTimerDisabled:YES];
+#endif
 }
 
 - (void)stop {
     [self cleanFilters];
     [self.videoCamera stopCameraCapture];
     [self previewRemoveGpuImageView];
+#ifndef UPYUN_APP_EXTENSIONS
     [[UIApplication sharedApplication] setIdleTimerDisabled:NO];
+#endif
 }
 
 - (void)restart {
@@ -777,6 +802,7 @@
 }
 
 - (void)addNotifications {
+#ifndef UPYUN_APP_EXTENSIONS
     NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
     [notificationCenter addObserver:self
                            selector:@selector(applicationWillResignActive:)
@@ -787,6 +813,7 @@
                            selector:@selector(applicationDidBecomeActive:)
                                name:UIApplicationDidBecomeActiveNotification
                              object:[UIApplication sharedApplication]];
+#endif
 }
 
 

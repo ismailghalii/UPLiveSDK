@@ -9,10 +9,22 @@
 #import "UPAVCapturer.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <UPLiveSDK/UPAVStreamer.h>
-
 #import "GPUImage.h"
 #import "GPUImageFramebuffer.h"
 #import "LFGPUImageBeautyFilter.h"
+//#import <UPRtcSDK/RtcManager.h>
+
+
+
+
+//连麦模块可先择集成
+#ifdef _UPRTCSDK_
+
+@interface UPAVCapturer()<RtcManagerDataOutProtocol>
+@property (nonatomic, strong) RtcManager *rtc;
+@end
+#endif
+
 
 @import  Accelerate;
 
@@ -26,17 +38,18 @@
     BOOL _backGroundFrameSendloopOn;
     
     //video size, capture size
-    CGSize _capturerPresetLevelFrameCropRect;
+    CGSize _capturerPresetLevelFrameCropSize;
     dispatch_queue_t _pushFrameQueue;
-
+    UIView *_preview;
+    NSString *_outStreamPath;
+    
 }
 
 @property (nonatomic, assign) int pushStreamReconnectCount;
-@property (nonatomic, strong) UPAVStreamer *rtmpStreamer;
-@property (nonatomic, strong) UPVideoCapture *upVideoCapture;
-@property (nonatomic, strong) UPAudioCapture *audioUnitRecorder;
-@property (nonatomic) dispatch_source_t networkStateTimer;
-@property (nonatomic, assign) int networkLevel;
+
+@property (nonatomic, strong) UPAVStreamer *rtmpStreamer; // rtmp 推流器
+@property (nonatomic, strong) UPVideoCapture *upVideoCapture; // 视频采集器
+@property (nonatomic, strong) UPAudioCapture *audioUnitRecorder; // 音频采集器
 
 
 @property (nonatomic, assign) NSTimeInterval startReconnectTimeInterval;
@@ -46,7 +59,8 @@
 @end
 
 
-#pragma mark capturer dash
+
+#pragma mark capturer dashboard
 
 @interface UPAVCapturerDashboard()
 
@@ -125,35 +139,48 @@
     if (self) {
         _videoOrientation = AVCaptureVideoOrientationPortrait;
         self.capturerPresetLevel = UPAVCapturerPreset_640x480;
-        _capturerPresetLevelFrameCropRect = CGSizeZero;
+        _capturerPresetLevelFrameCropSize = CGSizeZero;
         _fps = 24;
-        _networkLevel = -1;
         _viewZoomScale = 1;
         _applicationActive = YES;
         _streamingOn = YES;
         _filterOn = NO;
         _increaserRate = 100;//原声
         _pushFrameQueue = dispatch_queue_create("UPAVCapturer.pushFrameQueue", DISPATCH_QUEUE_SERIAL);
-
         
         _dashboard = [UPAVCapturerDashboard new];
         _dashboard.infoSource_Capturer = self;
         
-        _audioUnitRecorder = [[UPAudioCapture alloc] initWith:UPAudioUnitCategory_recorder];
+        //注意:为了与 rtc 系统衔接这里的 samplerate 需要与 rtc 保持一致 32Khz。
+        _audioUnitRecorder = [[UPAudioCapture alloc] initWith:UPAudioUnitCategory_recorder
+                                                   samplerate:32000];
         _audioUnitRecorder.delegate = self;
         
         _upVideoCapture = [[UPVideoCapture alloc]init];
         _upVideoCapture.delegate = self;
-        [self addNotifications];
         
+
+        
+        [self addNotifications];
         _timeSec = 30;
         _reconnectCount = 0;
+        
+        
+        
+        
+#ifdef _UPRTCSDK_
+        self.rtc = [RtcManager sharedInstance];
+        self.rtc.delegate = self;
+        [self.rtc setAppId:@"14467694a1194adab41370cbed5b2fb6"];
+        NSLog(@"连麦模块");
+#endif
         
     }
     return self;
 }
 
 - (void)addNotifications {
+#ifndef UPYUN_APP_EXTENSIONS
     NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
     [notificationCenter addObserver:self
                            selector:@selector(applicationDidResignActive:)
@@ -164,6 +191,8 @@
                            selector:@selector(applicationDidBecomeActive:)
                                name:UIApplicationDidBecomeActiveNotification
                              object:[UIApplication sharedApplication]];
+
+#endif
 }
 
 - (void)removeNotifications {
@@ -234,7 +263,7 @@
                 self.pushStreamReconnectCount = self.pushStreamReconnectCount + 1;
                 NSString *message = [NSString stringWithFormat:@"UPAVPacketManagerStatusStreamWriteError %@, reconnect %d times", _capturerError, self.pushStreamReconnectCount];
                 
-                NSLog(@"%@",message);
+//                NSLog(@"reconnect --%@",message);
                 
                 if (self.pushStreamReconnectCount < 3 && _reconnectCount < 20) {
                     _reconnectCount++;
@@ -254,13 +283,22 @@
     _rtmpStreamer.streamingOn = _streamingOn;
 }
 
+- (NSString *)outStreamPath{
+    return _outStreamPath;
+}
+
 - (void)setOutStreamPath:(NSString *)outStreamPath {
+    _outStreamPath = outStreamPath;
     dispatch_async(_pushFrameQueue, ^{
         _rtmpStreamer = [[UPAVStreamer alloc] initWithUrl:outStreamPath];
         _rtmpStreamer.audioOnly = self.audioOnly;
         _rtmpStreamer.bitrate = _bitrate;
         _rtmpStreamer.delegate = self;
         _rtmpStreamer.streamingOn = _streamingOn;
+        if (_openDynamicBitrate) {
+            [self openStreamDynamicBitrate:YES];
+        }
+        
     });
 }
 
@@ -282,8 +320,8 @@
     
 }
 
-- (void)setCapturerPresetLevelFrameCropRect:(CGSize)capturerPresetLevelFrameCropRect {
-    [_upVideoCapture resetCapturerPresetLevelFrameSizeWithCropRect:capturerPresetLevelFrameCropRect];
+- (void)setCapturerPresetLevelFrameCropSize:(CGSize)capturerPresetLevelFrameCropSize {
+    [_upVideoCapture resetCapturerPresetLevelFrameSizeWithCropRect:capturerPresetLevelFrameCropSize];
 }
 
 - (void)setVideoOrientation:(AVCaptureVideoOrientation)videoOrientation {
@@ -323,29 +361,6 @@
 - (void)setFps:(int32_t)fps{
     _fps = fps;
     _upVideoCapture.fps = fps;
-}
-
-- (void)setNetworkSateBlock:(NetworkStateBlock)networkSateBlock {
-    dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
-    _networkStateTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
-    dispatch_time_t startTime = dispatch_time(DISPATCH_TIME_NOW, 6 * NSEC_PER_SEC);
-    dispatch_source_set_timer(_networkStateTimer, startTime, 1 * NSEC_PER_SEC, 0);
-    dispatch_source_set_event_handler(_networkStateTimer, ^{
-        if (networkSateBlock) {
-            int level = 0;
-            if (_rtmpStreamer.fps_streaming/_rtmpStreamer.fps_capturer > 0.9) {
-                level = 2;
-            } else if (_rtmpStreamer.fps_streaming/_rtmpStreamer.fps_capturer > 0.8) {
-                level = 1;
-            }
-            if (level != _networkLevel) {
-                networkSateBlock(level);
-                _networkLevel = level;
-            }
-        }
-    });
-    
-    dispatch_resume(_networkStateTimer);
 }
 
 
@@ -388,7 +403,8 @@
 }
 
 - (UIView *)previewWithFrame:(CGRect)frame contentMode:(UIViewContentMode)mode {
-    return [_upVideoCapture previewWithFrame:frame contentMode:mode];
+    _preview = [_upVideoCapture previewWithFrame:frame contentMode:mode];
+    return _preview;
 }
 
 - (void)setWatermarkView:(UIView *)watermarkView Block:(WatermarkBlock)block {
@@ -400,10 +416,19 @@
     [_upVideoCapture start];
     [_audioUnitRecorder start];
     self.capturerStatus = UPAVCapturerStatusLiving;
+    
+#ifndef UPYUN_APP_EXTENSIONS
     [[UIApplication sharedApplication] setIdleTimerDisabled:YES];
+#endif
+    
 }
 
 - (void)stop {
+    
+#ifdef _UPRTCSDK_
+    [self.rtc stop];
+#endif
+    
     [_upVideoCapture stop];
     [_audioUnitRecorder stop];
     self.capturerStatus = UPAVCapturerStatusStopped;
@@ -411,17 +436,24 @@
         [_rtmpStreamer stop];
         _rtmpStreamer = nil;
     });
+#ifndef UPYUN_APP_EXTENSIONS
     [[UIApplication sharedApplication] setIdleTimerDisabled:NO];
-    if (_networkStateTimer) {
-        dispatch_source_cancel(_networkStateTimer);
-    }
+#endif
     _reconnectCount = 0;
+    if (_backGroundPixBuffer) {
+        CFRelease(_backGroundPixBuffer);
+        _backGroundPixBuffer = nil;
+    }
     if (_delayTimer) {
         [_delayTimer invalidate];
         _delayTimer = nil;
     }
     
 }
+
+
+
+
 
 - (void)dealloc {
     [self removeNotifications];
@@ -447,6 +479,45 @@
     _upVideoCapture.viewZoomScale = viewZoomScale;
 }
 
+- (void)setOpenDynamicBitrate:(BOOL)openDynamicBitrate {
+    _openDynamicBitrate = openDynamicBitrate;
+    if (_rtmpStreamer) {
+        [self openStreamDynamicBitrate:_openDynamicBitrate];
+    }
+}
+
+
+#pragma mark 动态码率
+
+
+- (void)openStreamDynamicBitrate:(BOOL)open {
+    int max = -1;
+    int min = -1;
+    switch (_capturerPresetLevel) {
+        case UPAVCapturerPreset_480x360:{
+            max = 600;
+            min = 200;
+            break;
+        }
+        case UPAVCapturerPreset_640x480:{
+            max = 720;
+            min = 400;
+            break;
+        }
+        case UPAVCapturerPreset_960x540:{
+            max = 960;
+            min = 500;
+            break;
+        }
+        case UPAVCapturerPreset_1280x720:{
+            max = 1440;
+            min = 800;
+            break;
+        }
+    }
+    [_rtmpStreamer dynamicBitrate:open Max:max * 1000 Min:min * 1000];
+}
+
 #pragma mark-- filter 滤镜
 - (void)setFilter:(GPUImageOutput<GPUImageInput> *)filter {
     [_upVideoCapture setFilter:filter];
@@ -465,6 +536,13 @@
 }
 
 #pragma mark UPAVStreamerDelegate
+
+-(void)streamer:(UPAVStreamer *)streamer networkSates:(UPAVStreamerNetworkState)status {
+    if (_networkSateBlock) {
+        _networkSateBlock(status);
+    }
+}
+
 
 - (void)streamer:(UPAVStreamer *)streamer statusDidChange:(UPAVStreamerStatus)status error:(NSError *)error {
     
@@ -549,6 +627,7 @@
     __weak UPAVCapturer *weakself = self;
     dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayInSeconds * NSEC_PER_SEC));
     dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
+        
         [_rtmpStreamer pushPixelBuffer:_backGroundPixBuffer];
         [weakself backGroundFrameSendLoopStart:loopid];
     });
@@ -557,14 +636,45 @@
 #pragma mark push Capture audio/video buffer
 
 - (void)didCapturePixelBuffer:(CVPixelBufferRef)pixelBuffer {
+    if (!_backGroundPixBuffer) {
+        size_t width_o = CVPixelBufferGetWidth(pixelBuffer);
+        size_t height_o = CVPixelBufferGetHeight(pixelBuffer);
+        OSType format_o = CVPixelBufferGetPixelFormatType(pixelBuffer);
+        CVPixelBufferRef pixelBuffer_c;
+        CVPixelBufferCreate(nil, width_o, height_o, format_o, nil, &pixelBuffer_c);
+        CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+        CVPixelBufferLockBaseAddress(pixelBuffer_c, 0);
+        size_t dataSize_o = CVPixelBufferGetDataSize(pixelBuffer);
+        void *target = CVPixelBufferGetBaseAddress(pixelBuffer_c);
+        bzero(target, dataSize_o);
+        _backGroundPixBuffer = pixelBuffer_c;
+    }
+    
+#ifdef _UPRTCSDK_
+    if (self.rtc.channelConnected) {
+        // rtc 已经连接视频切换到 rtc 系统
+        [[RtcManager sharedInstance] deliverVideoFrame:pixelBuffer];
+        return;
+    }
+#endif
+    
     //视频数据压缩入列发送队列
     dispatch_sync(_pushFrameQueue, ^{
         [_rtmpStreamer pushPixelBuffer:pixelBuffer];
-        _backGroundPixBuffer = pixelBuffer;
+        if (pixelBuffer) {
+            CFRelease(pixelBuffer);
+        }
     });
 }
 
 - (void)didCaptureAudioBuffer:(AudioBuffer)audioBuffer withInfo:(AudioStreamBasicDescription)asbd{
+    
+#ifdef _UPRTCSDK_
+    if (self.rtc.channelConnected) {
+        // rtc 已经连接音频切换到 rtc 系统
+        return;
+    }
+#endif
     //音频数据压缩入列发送队列
     dispatch_sync(_pushFrameQueue, ^{
         typedef struct AudioBuffer  AudioBuffer;
@@ -576,6 +686,68 @@
         [_rtmpStreamer pushAudioBuffer:audioBuffer info:asbd];
     });
 }
+
+- (void)rtcConnect:(NSString *)channelId {
+#ifdef _UPRTCSDK_
+    if (![self trySetRtcInputVideoSize]) {
+        NSLog(@"错误：连麦不支持当前视频尺寸！");
+        return;
+    }
+    
+    [self.rtc stop];
+    [self.rtc startWithRtcChannel:channelId];
+    CGFloat w = [UIScreen mainScreen].bounds.size.width / 4;
+    CGFloat h = [UIScreen mainScreen].bounds.size.height / 4;
+    NSLog(@"%f", [UIScreen mainScreen].bounds.size.width);
+    NSLog(@"%f", [UIScreen mainScreen].bounds.size.height);
+    
+    [self.rtc setRemoteViewFrame:CGRectMake([UIScreen mainScreen].bounds.size.width - w - 10, 10, w, h)];
+    [self.rtc.remoteView removeFromSuperview];
+    [_preview addSubview:self.rtc.remoteView]; //预览视图上添加rtc小窗口
+#endif
+}
+
+- (void)rtcClose {
+#ifdef _UPRTCSDK_
+    [self.rtc stop];
+    //???? rtc 停止把 _audioUnitRecorder 也阻挡了？  并且需要延时才能重新开启 _audioUnitRecorder？？？
+    double delayInSeconds = 2.0;
+    dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayInSeconds * NSEC_PER_SEC));
+    dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
+        if (self.capturerStatus == UPAVCapturerStatusLiving) {
+            [_audioUnitRecorder stop];
+            [_audioUnitRecorder start];
+        }
+    });
+    
+    [self.rtc.remoteView removeFromSuperview];
+#endif
+}
+
+
+#ifdef _UPRTCSDK_
+
+- (BOOL)trySetRtcInputVideoSize{
+    int w = _upVideoCapture.capturerPresetLevelFrameCropSize.width;
+    int h = _upVideoCapture.capturerPresetLevelFrameCropSize.height;
+    return  [self.rtc setInputVideoWidth:w height:h];
+}
+
+
+// rtc 开启，rtc 音视频数据回调接口
+-(void)rtc:(RtcManager *)manager didReceiveAudioBuffer:(AudioBuffer)audioBuffer info:(AudioStreamBasicDescription)asbd {
+    [_rtmpStreamer pushAudioBuffer:audioBuffer info:asbd];
+    
+}
+
+-(void)rtc:(RtcManager *)manager didReceiveVideoBuffer:(CVPixelBufferRef)pixelBuffer {
+    dispatch_sync(_pushFrameQueue, ^{
+        [_rtmpStreamer pushPixelBuffer:pixelBuffer];
+    });
+}
+
+#endif
+
 
 - (void)reconnectTimes {
     dispatch_async(dispatch_get_main_queue(), ^{

@@ -28,6 +28,7 @@ typedef NS_ENUM(NSInteger, UPAudioUnitCategory) {
 
 
 - (id)initWith:(UPAudioUnitCategory)category;
+- (id)initWith:(UPAudioUnitCategory)category samplerate:(int)samplerate;
 - (void)start;
 - (void)stop;
 
