@@ -126,6 +126,13 @@
             break;
     }
     [self previewRemoveGpuImageView];
+    
+    _gpuImageView.autoresizingMask = UIViewAutoresizingFlexibleWidth
+    | UIViewAutoresizingFlexibleTopMargin
+    | UIViewAutoresizingFlexibleRightMargin
+    | UIViewAutoresizingFlexibleLeftMargin
+    | UIViewAutoresizingFlexibleHeight
+    | UIViewAutoresizingFlexibleBottomMargin;
     [_preview insertSubview:_gpuImageView atIndex:0];
     
     // 设置美颜滤镜
@@ -242,7 +249,14 @@
     }
     [_nFilter addTarget:_gpuImageView];
     [self outputPixelBuffer];
-    [self needFlip];
+    //[self needFlip];
+    BOOL needFlip = NO;
+    if (_camaraPosition == AVCaptureDevicePositionFront) {
+        needFlip = YES;
+    }
+    if (needFlip) {
+        [_gpuImageView setInputRotation:kGPUImageFlipHorizonal atIndex:0];
+    }
 }
 
 /// 去除滤镜链

@@ -13,6 +13,7 @@
 #import "UPAudioCapture.h"
 #import "UPVideoCapture.h"
 #import "GPUImage.h"
+//#import <UPRtcSDK/RtcManager.h>
 
 
 typedef NS_ENUM(NSInteger, UPAVCapturerStatus) {
@@ -109,8 +110,9 @@ typedef void(^NetworkStateBlock)(UPAVStreamerNetworkState level);
 - (void)start;
 - (void)stop;
 
-/// 连麦开启和关闭
-- (void)rtcConnect:(NSString *)channelId;
+/// 连麦
+- (void)rtcInitWithAppId:(NSString *)aapid;
+- (int)rtcConnect:(NSString *)channelId;
 - (void)rtcClose;
 
 /// 设置水印和动态处理的 block

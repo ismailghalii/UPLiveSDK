@@ -27,10 +27,8 @@ typedef NS_ENUM(NSInteger, UPAVStreamStatus) {
     UPAVStreamStatusReady,
 };
 
-typedef void(^PlayerStadusBlock)(UPAVPlayerStatus playerStatus, NSError *error);
-typedef void(^BufferingProgressBlock)(float progress);
-typedef void(^AudioBufferListReleaseBlock)(AudioBufferList *audioBufferListe);
 
+typedef void(^AudioBufferListReleaseBlock)(AudioBufferList *audioBufferListe);
 
 
 @interface UPAVPlayerStreamInfo : NSObject
@@ -103,7 +101,6 @@ willRenderBuffer:(AudioBufferList *)audioBufferList
 @property (nonatomic, assign) CGFloat volume;
 @property (nonatomic, assign) CGFloat bright;
 @property (nonatomic, assign) BOOL mute;
-@property (nonatomic, assign) NSUInteger bitrateLevel;
 @property (nonatomic, assign) NSTimeInterval bufferingTimeOutLimit;
 @property (nonatomic, copy) NSString *url;
 @property (nonatomic, assign, readonly) float displayPosition;//视频播放到的时间点

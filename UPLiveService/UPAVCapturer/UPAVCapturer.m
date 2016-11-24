@@ -12,10 +12,6 @@
 #import "GPUImage.h"
 #import "GPUImageFramebuffer.h"
 #import "LFGPUImageBeautyFilter.h"
-//#import <UPRtcSDK/RtcManager.h>
-
-
-
 
 //连麦模块可先择集成
 #ifdef _UPRTCSDK_
@@ -159,25 +155,22 @@
         _upVideoCapture = [[UPVideoCapture alloc]init];
         _upVideoCapture.delegate = self;
         
-
-        
         [self addNotifications];
         _timeSec = 30;
         _reconnectCount = 0;
-        
-        
-        
-        
-#ifdef _UPRTCSDK_
-        self.rtc = [RtcManager sharedInstance];
-        self.rtc.delegate = self;
-        [self.rtc setAppId:@"14467694a1194adab41370cbed5b2fb6"];
-        NSLog(@"连麦模块");
-#endif
-        
     }
     return self;
 }
+
+- (void)rtcInitWithAppId:(NSString *)aapid {
+#ifdef _UPRTCSDK_
+    self.rtc = [RtcManager sharedInstance];
+    self.rtc.delegate = self;
+    [self.rtc setAppId:aapid];
+    NSLog(@"连麦模块");
+#endif
+}
+
 
 - (void)addNotifications {
 #ifndef UPYUN_APP_EXTENSIONS
@@ -289,17 +282,6 @@
 
 - (void)setOutStreamPath:(NSString *)outStreamPath {
     _outStreamPath = outStreamPath;
-    dispatch_async(_pushFrameQueue, ^{
-        _rtmpStreamer = [[UPAVStreamer alloc] initWithUrl:outStreamPath];
-        _rtmpStreamer.audioOnly = self.audioOnly;
-        _rtmpStreamer.bitrate = _bitrate;
-        _rtmpStreamer.delegate = self;
-        _rtmpStreamer.streamingOn = _streamingOn;
-        if (_openDynamicBitrate) {
-            [self openStreamDynamicBitrate:YES];
-        }
-        
-    });
 }
 
 - (void)setCamaraPosition:(AVCaptureDevicePosition)camaraPosition {
@@ -412,8 +394,40 @@
 }
 
 - (void)start {
+    //实例化推流器 _rtmpStreamer
+    dispatch_async(_pushFrameQueue, ^{
+        _rtmpStreamer = [[UPAVStreamer alloc] initWithUrl:_outStreamPath];
+        if (!_rtmpStreamer) {
+            NSError *error = [NSError errorWithDomain:@"UPAVCapturer_error"
+                                                 code:100
+                                             userInfo:@{NSLocalizedDescriptionKey:@"_rtmpStreamer init failed, please check the push url"}];
+            
+            _capturerError = error;
+
+            if (_streamingOn && [self.delegate respondsToSelector:@selector(capturer:capturerError:)]) {
+                
+                /*抛出推流器实例失败错误
+                 在只拍摄不推流的情况下，例如观众端连麦时候 outStreamPath 是 nil 或者无效地址，这个错误不必抛出。
+                 除此之外的大多数正常推流、主播连麦都需要推流器，所以这里默认初始化一个 _rtmpStreamer 备用。
+                 */
+                
+                [self.delegate capturer:self capturerError:_capturerError];
+            }
+        }
+        _rtmpStreamer.audioOnly = self.audioOnly;
+        _rtmpStreamer.bitrate = _bitrate;
+        _rtmpStreamer.delegate = self;
+        _rtmpStreamer.streamingOn = _streamingOn;
+        if (_openDynamicBitrate) {
+            [self openStreamDynamicBitrate:YES];
+        }
+        
+    });
+
     _rtmpStreamer.audioOnly = self.audioOnly;
-    [_upVideoCapture start];
+    if (!self.audioOnly) {
+        [_upVideoCapture start];
+    }
     [_audioUnitRecorder start];
     self.capturerStatus = UPAVCapturerStatusLiving;
     
@@ -424,14 +438,26 @@
 }
 
 - (void)stop {
+    //关闭背景音播放器
+    if([UPAVCapturer sharedInstance].backgroudMusicOn) {
+        [UPAVCapturer sharedInstance].backgroudMusicOn = NO;
+    }
     
+    //关闭连麦模块
 #ifdef _UPRTCSDK_
-    [self.rtc stop];
+    if (self.rtc.channelConnected) {
+        [self.rtc stop];
+    }
 #endif
-    
+    //关闭视频采集
     [_upVideoCapture stop];
+    
+    //关闭音频采集
     [_audioUnitRecorder stop];
+    
     self.capturerStatus = UPAVCapturerStatusStopped;
+    
+    //关闭推流器
     dispatch_async(_pushFrameQueue, ^{
         [_rtmpStreamer stop];
         _rtmpStreamer = nil;
@@ -450,10 +476,6 @@
     }
     
 }
-
-
-
-
 
 - (void)dealloc {
     [self removeNotifications];
@@ -627,8 +649,9 @@
     __weak UPAVCapturer *weakself = self;
     dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayInSeconds * NSEC_PER_SEC));
     dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
-        
-        [_rtmpStreamer pushPixelBuffer:_backGroundPixBuffer];
+        if (_streamingOn) {
+            [_rtmpStreamer pushPixelBuffer:_backGroundPixBuffer];
+        }
         [weakself backGroundFrameSendLoopStart:loopid];
     });
 }
@@ -660,7 +683,9 @@
     
     //视频数据压缩入列发送队列
     dispatch_sync(_pushFrameQueue, ^{
-        [_rtmpStreamer pushPixelBuffer:pixelBuffer];
+        if (_streamingOn) {
+            [_rtmpStreamer pushPixelBuffer:pixelBuffer];
+        }
         if (pixelBuffer) {
             CFRelease(pixelBuffer);
         }
@@ -683,15 +708,19 @@
                 memset(audioBuffer.mData, 0, audioBuffer.mDataByteSize);
             }
         }
-        [_rtmpStreamer pushAudioBuffer:audioBuffer info:asbd];
+        
+        if (_streamingOn) {
+            [_rtmpStreamer pushAudioBuffer:audioBuffer info:asbd];
+        }
+        
     });
 }
 
-- (void)rtcConnect:(NSString *)channelId {
+- (int)rtcConnect:(NSString *)channelId {
 #ifdef _UPRTCSDK_
     if (![self trySetRtcInputVideoSize]) {
-        NSLog(@"错误：连麦不支持当前视频尺寸！");
-        return;
+        NSLog(@"连麦错误：请检查 appID 及 采集视频尺寸");
+        return -2;
     }
     
     [self.rtc stop];
@@ -704,14 +733,20 @@
     [self.rtc setRemoteViewFrame:CGRectMake([UIScreen mainScreen].bounds.size.width - w - 10, 10, w, h)];
     [self.rtc.remoteView removeFromSuperview];
     [_preview addSubview:self.rtc.remoteView]; //预览视图上添加rtc小窗口
+    return 0;
+#else
+    NSLog(@"连麦需要安装连麦模块：UPRtcSDK.framework");
+    return -1;
 #endif
+
+    
 }
 
 - (void)rtcClose {
 #ifdef _UPRTCSDK_
     [self.rtc stop];
-    //???? rtc 停止把 _audioUnitRecorder 也阻挡了？  并且需要延时才能重新开启 _audioUnitRecorder？？？
-    double delayInSeconds = 2.0;
+    //rtc _audioUnitRecorder
+    double delayInSeconds = 1;
     dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayInSeconds * NSEC_PER_SEC));
     dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
         if (self.capturerStatus == UPAVCapturerStatusLiving) {
@@ -736,13 +771,16 @@
 
 // rtc 开启，rtc 音视频数据回调接口
 -(void)rtc:(RtcManager *)manager didReceiveAudioBuffer:(AudioBuffer)audioBuffer info:(AudioStreamBasicDescription)asbd {
-    [_rtmpStreamer pushAudioBuffer:audioBuffer info:asbd];
-    
+    if (_streamingOn) {
+        [_rtmpStreamer pushAudioBuffer:audioBuffer info:asbd];
+    }
 }
 
 -(void)rtc:(RtcManager *)manager didReceiveVideoBuffer:(CVPixelBufferRef)pixelBuffer {
     dispatch_sync(_pushFrameQueue, ^{
-        [_rtmpStreamer pushPixelBuffer:pixelBuffer];
+        if (_streamingOn) {
+            [_rtmpStreamer pushPixelBuffer:pixelBuffer];
+        }
     });
 }
 
