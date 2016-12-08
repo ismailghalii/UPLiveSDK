@@ -162,15 +162,6 @@
     return self;
 }
 
-- (void)rtcInitWithAppId:(NSString *)aapid {
-#ifdef _UPRTCSDK_
-    self.rtc = [RtcManager sharedInstance];
-    self.rtc.delegate = self;
-    [self.rtc setAppId:aapid];
-    NSLog(@"连麦模块");
-#endif
-}
-
 
 - (void)addNotifications {
 #ifndef UPYUN_APP_EXTENSIONS
@@ -196,6 +187,11 @@
 - (void)setFilterOn:(BOOL)filterOn {
     _filterOn = filterOn;
     _upVideoCapture.filterOn = filterOn;
+}
+
+
+- (GPUImageBeautifyFilter *)beautifyFilter {
+    return _upVideoCapture.beautifyFilter;
 }
 
 - (void)setCapturerStatus:(UPAVCapturerStatus)capturerStatus {
@@ -256,7 +252,7 @@
                 self.pushStreamReconnectCount = self.pushStreamReconnectCount + 1;
                 NSString *message = [NSString stringWithFormat:@"UPAVPacketManagerStatusStreamWriteError %@, reconnect %d times", _capturerError, self.pushStreamReconnectCount];
                 
-//                NSLog(@"reconnect --%@",message);
+                NSLog(@"reconnect --%@",message);
                 
                 if (self.pushStreamReconnectCount < 3 && _reconnectCount < 20) {
                     _reconnectCount++;
@@ -443,17 +439,18 @@
         [UPAVCapturer sharedInstance].backgroudMusicOn = NO;
     }
     
+    //关闭视频采集
+    [_upVideoCapture stop];
+
+    //关闭音频采集
+    [_audioUnitRecorder stop];
+    
     //关闭连麦模块
 #ifdef _UPRTCSDK_
     if (self.rtc.channelConnected) {
         [self.rtc stop];
     }
 #endif
-    //关闭视频采集
-    [_upVideoCapture stop];
-    
-    //关闭音频采集
-    [_audioUnitRecorder stop];
     
     self.capturerStatus = UPAVCapturerStatusStopped;
     
@@ -473,8 +470,7 @@
     if (_delayTimer) {
         [_delayTimer invalidate];
         _delayTimer = nil;
-    }
-    
+    }    
 }
 
 - (void)dealloc {
@@ -659,6 +655,9 @@
 #pragma mark push Capture audio/video buffer
 
 - (void)didCapturePixelBuffer:(CVPixelBufferRef)pixelBuffer {
+    //kCVPixelFormatType_420YpCbCr8PlanarFullRange
+//    NSLog(@"PixelFormatType %@", NSStringFromCode(CVPixelBufferGetPixelFormatType(pixelBuffer)));
+    
     if (!_backGroundPixBuffer) {
         size_t width_o = CVPixelBufferGetWidth(pixelBuffer);
         size_t height_o = CVPixelBufferGetHeight(pixelBuffer);
@@ -685,6 +684,9 @@
     dispatch_sync(_pushFrameQueue, ^{
         if (_streamingOn) {
             [_rtmpStreamer pushPixelBuffer:pixelBuffer];
+        } else {
+            //_streaming off 提示。
+            NSLog(@"_streaming off %d", _streamingOn);
         }
         if (pixelBuffer) {
             CFRelease(pixelBuffer);
@@ -716,6 +718,24 @@
     });
 }
 
+
+- (void)rtcInitWithAppId:(NSString *)appid {
+#ifdef _UPRTCSDK_
+    self.rtc = [RtcManager sharedInstance];
+    self.rtc.delegate = self;
+    [self.rtc setAppId:appid];
+    NSLog(@"连麦模块 InitWithAppId");
+#endif
+}
+
+- (void)rtcSetRemoteViewframe:(CGRect)frame targetViewIndex:(int)index defaultShow:(BOOL)on {
+#ifdef _UPRTCSDK_
+    //设置远程小视图
+    [self.rtc setRemoteViewframe:frame targetViewIndex:index defaultShow:on];
+
+#endif
+}
+
 - (int)rtcConnect:(NSString *)channelId {
 #ifdef _UPRTCSDK_
     if (![self trySetRtcInputVideoSize]) {
@@ -723,23 +743,14 @@
         return -2;
     }
     
-    [self.rtc stop];
+    self.rtc.remoteViewsContainerView = _preview;
     [self.rtc startWithRtcChannel:channelId];
-    CGFloat w = [UIScreen mainScreen].bounds.size.width / 4;
-    CGFloat h = [UIScreen mainScreen].bounds.size.height / 4;
-    NSLog(@"%f", [UIScreen mainScreen].bounds.size.width);
-    NSLog(@"%f", [UIScreen mainScreen].bounds.size.height);
-    
-    [self.rtc setRemoteViewFrame:CGRectMake([UIScreen mainScreen].bounds.size.width - w - 10, 10, w, h)];
-    [self.rtc.remoteView removeFromSuperview];
-    [_preview addSubview:self.rtc.remoteView]; //预览视图上添加rtc小窗口
+ 
     return 0;
 #else
     NSLog(@"连麦需要安装连麦模块：UPRtcSDK.framework");
     return -1;
 #endif
-
-    
 }
 
 - (void)rtcClose {
@@ -751,11 +762,14 @@
     dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
         if (self.capturerStatus == UPAVCapturerStatusLiving) {
             [_audioUnitRecorder stop];
+            NSLog(@"_audioUnitRecorder stop");
+
             [_audioUnitRecorder start];
+            NSLog(@"_audioUnitRecorder start");
+
         }
     });
     
-    [self.rtc.remoteView removeFromSuperview];
 #endif
 }
 
@@ -769,11 +783,13 @@
 }
 
 
-// rtc 开启，rtc 音视频数据回调接口
+/*** rtc 音视频输出接口 ***/
 -(void)rtc:(RtcManager *)manager didReceiveAudioBuffer:(AudioBuffer)audioBuffer info:(AudioStreamBasicDescription)asbd {
-    if (_streamingOn) {
-        [_rtmpStreamer pushAudioBuffer:audioBuffer info:asbd];
-    }
+    dispatch_sync(_pushFrameQueue, ^{
+        if (_streamingOn) {
+            [_rtmpStreamer pushAudioBuffer:audioBuffer info:asbd];
+        }
+    });
 }
 
 -(void)rtc:(RtcManager *)manager didReceiveVideoBuffer:(CVPixelBufferRef)pixelBuffer {
@@ -782,6 +798,29 @@
             [_rtmpStreamer pushPixelBuffer:pixelBuffer];
         }
     });
+}
+
+/*** rtc 远程用户进出房间回调接口 ***/
+-(void)rtc:(RtcManager *)manager didJoinedOfUid:(NSUInteger)uid {
+    NSLog(@"======  rtc didJoinedOfUid: %lu   onlineUids: %@", (unsigned long)uid, manager.onlineUids);
+
+}
+-(void)rtc:(RtcManager *)manager didOfflineOfUid:(NSUInteger)uid reason:(NSUInteger)reason {
+    NSLog(@"======  rtc didOfflineOfUid: %lu   onlineUids: %@", (unsigned long)uid, manager.onlineUids);
+}
+
+/*** rtc 错误及警告***/
+- (void)rtc:(RtcManager *)manager didOccurWarning:(NSUInteger)warningCode {
+    
+    
+}
+- (void)rtc:(RtcManager *)manager didOccurError:(NSUInteger)errorCode {
+    NSLog(@"======  rtc didOccurError: %lu", (unsigned long)errorCode);
+}
+
+- (void)rtcConnectionDidLost:(RtcManager *)manager {
+    //连麦异常断开
+    [self rtcClose];
 }
 
 #endif

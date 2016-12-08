@@ -14,7 +14,7 @@
 /*
  PCM sample 格式需要是 s16
  噪音分贝设置负值。 默认是 -8
- PCM samplerate。 默认 32000
+ PCM samplerate。 默认 44100
 */
 
 

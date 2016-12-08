@@ -15,6 +15,8 @@
 }
 
 @property (nonatomic, assign) CGFloat intensity;
+/// 边缘检测调整
+@property (nonatomic, assign)CGFloat cannyEdgeLevel;
 
 @end
 
@@ -76,6 +78,13 @@ NSString *const kGPUImageBeautifyFragmentShaderString = SHADER_STRING
     {
         return nil;
     }
+    
+    
+    //defalut value
+    _level = 0.6;
+    _bilateralLevel = 4.0;
+    _saturationLevel = 1.1;
+    _brightnessLevel = 1.1;
     
     // First pass: face smoothing filter
     bilateralFilter = [[GPUImageBilateralFilter alloc] init];

@@ -35,13 +35,15 @@
     CALayer *_focusLayer;
     
     UIInterfaceOrientation _previewOrientation;
+    
+    
+    CGRect faceFrame;
+    CGPoint leftEyeCenter, rightEyeCenter, mouthCenter;
 }
 
 @property (nonatomic, copy) NSString *sessionPreset;
 
 //@property (nonatomic, strong) LFGPUImageBeautyFilter *beautifyFilter;
-@property (nonatomic, strong) GPUImageBeautifyFilter *beautifyFilter;
-
 @property (nonatomic, strong) GPUImageCropFilter *cropfilter;
 @property (nonatomic, strong) GPUImageTransformFilter *scaleFilter;
 @property (nonatomic, strong) GPUImageView *gpuImageView;
@@ -284,18 +286,19 @@
         size_t height_o = CVPixelBufferGetHeight(pixelBuffer);
         OSType format_o = CVPixelBufferGetPixelFormatType(pixelBuffer);
 
+        
+        NSDictionary *pixelBufferAttributes = [NSDictionary dictionaryWithObjectsAndKeys: [NSDictionary dictionary],kCVPixelBufferIOSurfacePropertiesKey,nil];
+
         CVPixelBufferRef pixelBuffer_c;
-        CVPixelBufferCreate(nil, width_o, height_o, format_o, nil, &pixelBuffer_c);
+        CVPixelBufferCreate(NULL, width_o, height_o, format_o, (__bridge CFDictionaryRef)(pixelBufferAttributes), &pixelBuffer_c);
        
         CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
         CVPixelBufferLockBaseAddress(pixelBuffer_c, 0);
-        void *baseAddress_o = CVPixelBufferGetBaseAddress(pixelBuffer);
+        void *baseAddress_o = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0);
         size_t dataSize_o = CVPixelBufferGetDataSize(pixelBuffer);
         void *target = CVPixelBufferGetBaseAddress(pixelBuffer_c);
         memcpy(target, baseAddress_o, dataSize_o);
-        
         //int bytesPerRow = (int)CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0);
-
         CVPixelBufferUnlockBaseAddress(pixelBuffer_c, 0);
         CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
         
@@ -478,8 +481,8 @@
 }
 
 - (void)setFps:(int32_t)fps{
+    _fps = fps;
     if (_videoCamera) {
-        _fps = fps;
         _videoCamera.frameRate = fps;
     }
 }
@@ -503,7 +506,7 @@
     //记录preview的UI方向，如果UI方向和拍摄方向不一致时候，拍摄画面需要旋转
     _previewOrientation = [[UIApplication sharedApplication] statusBarOrientation];
 #endif
-    [self preViewAddTapGesture];
+//    [self preViewAddTapGesture];
     return _preview;
 }
 

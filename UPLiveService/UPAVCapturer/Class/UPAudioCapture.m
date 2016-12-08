@@ -92,7 +92,6 @@ static OSStatus audioRecordingCallback(void *inRefCon,
                                        UInt32 inBusNumber,
                                        UInt32 inNumberFrames,
                                        AudioBufferList *ioData) {
-    
     @autoreleasepool {
         UPAudioCapture *iosAudio = (__bridge UPAudioCapture *)inRefCon;
         AudioBuffer buffer;
@@ -226,11 +225,8 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
         [_audioGraph setMixerInputPcmInfo:_asbdBus1 forBusIndex:1];
     }
     
-    @synchronized (_mixerInputPcmPoolForBus0) {
+    @synchronized (self) {
         _mixerInputPcmPoolForBus0 = [NSMutableData new];
-    }
-    
-    @synchronized (_mixerInputPcmPoolForBus1) {
         _mixerInputPcmPoolForBus1 = [NSMutableData new];
     }
 }
@@ -419,7 +415,7 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
 - (void)enqueuePcmDataFor:(int)busIndex pcm:(NSData *)data{
     switch (busIndex) {
         case 0:{
-            @synchronized (_mixerInputPcmPoolForBus0) {
+            @synchronized (self) {
                 NSUInteger poollen = _mixerInputPcmPoolForBus0.length;
                 if (poollen > kMaxMixerInputPoolSize) {
                     return;
@@ -429,7 +425,7 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
         }
             break;
         case 1:{
-            @synchronized (_mixerInputPcmPoolForBus1) {
+            @synchronized (self) {
                 NSUInteger poollen = _mixerInputPcmPoolForBus1.length;
                 if (poollen > kMaxMixerInputPoolSize) {
                     return;
@@ -448,7 +444,7 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
     dispatch_sync(_queue, ^{
         switch (busIndex) {
             case 0:{
-                @synchronized (_mixerInputPcmPoolForBus0) {
+                @synchronized (self) {
                     NSUInteger poollen = _mixerInputPcmPoolForBus0.length;
                     if (poollen >= len) {
                         data = [_mixerInputPcmPoolForBus0 subdataWithRange:NSMakeRange(0, len)];
@@ -459,7 +455,7 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
             }
                 break;
             case 1:{
-                @synchronized (_mixerInputPcmPoolForBus1) {
+                @synchronized (self) {
                     NSUInteger poollen = _mixerInputPcmPoolForBus1.length;
                     if (poollen >= len) {
                         data = [_mixerInputPcmPoolForBus1 subdataWithRange:NSMakeRange(0, len)];

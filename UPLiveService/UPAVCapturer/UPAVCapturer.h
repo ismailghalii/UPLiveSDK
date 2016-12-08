@@ -13,7 +13,9 @@
 #import "UPAudioCapture.h"
 #import "UPVideoCapture.h"
 #import "GPUImage.h"
+#import "GPUImageBeautifyFilter.h"
 //#import <UPRtcSDK/RtcManager.h>
+
 
 
 typedef NS_ENUM(NSInteger, UPAVCapturerStatus) {
@@ -77,8 +79,11 @@ typedef void(^NetworkStateBlock)(UPAVStreamerNetworkState level);
 @property (nonatomic) BOOL streamingOn;
 /// 闪光灯开关
 @property (nonatomic) BOOL camaraTorchOn;
-/// 滤镜开关
+/// 美颜滤镜开关
 @property (nonatomic) BOOL filterOn;
+/// 美颜参数调整
+@property (nonatomic, strong) GPUImageBeautifyFilter *beautifyFilter;
+
 /// camera zoom scale default 1.0, between 1.0 ~ 3.0
 @property (nonatomic, assign) CGFloat viewZoomScale;
 
@@ -110,14 +115,24 @@ typedef void(^NetworkStateBlock)(UPAVStreamerNetworkState level);
 - (void)start;
 - (void)stop;
 
-/// 连麦
-- (void)rtcInitWithAppId:(NSString *)aapid;
+
+
+/****** 连麦功能******/
+
+/*** 设置连麦远程小视图
+ frame: 目标视图视图尺寸和位置
+ targetViewIndex：目标视图index。暂时支持3人连麦，两个小视图分别 index 为 0 和 1
+ defaultShow：目标视图是否默认显示。当设置为 NO 时，只有在远程用户进入房间才显示相应视图，远程用户登出房间视图自动消失。
+***/
+- (void)rtcSetRemoteViewframe:(CGRect)frame targetViewIndex:(int)index defaultShow:(BOOL)on;
+- (void)rtcInitWithAppId:(NSString *)appid;
 - (int)rtcConnect:(NSString *)channelId;
 - (void)rtcClose;
 
+
+
 /// 设置水印和动态处理的 block
 - (void)setWatermarkView:(UIView *)watermarkView Block:(WatermarkBlock)block;
-
 /// 单个滤镜 用户可以使用自定义滤镜
 - (void)setFilter:(GPUImageOutput<GPUImageInput> *)filter;
 /// 单个滤镜 用户可以使用已定义好的滤镜名字

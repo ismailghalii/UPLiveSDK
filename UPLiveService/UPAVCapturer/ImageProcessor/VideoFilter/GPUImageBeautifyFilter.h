@@ -20,26 +20,23 @@
 @class GPUImageSobelEdgeDetectionFilter;
 
 @interface GPUImageBeautifyFilter : GPUImageFilterGroup {
+    // 修改参考 http://www.jianshu.com/p/dde412cab8db
+
     GPUImageBilateralFilter *bilateralFilter;
-//    GPUImageCannyEdgeDetectionFilter *cannyEdgeFilter;
-    /// 修改参考 http://www.jianshu.com/p/dde412cab8db
     GPUImageSobelEdgeDetectionFilter *sobelEdgeFilter;
     GPUImageCombinationFilter *combinationFilter;
     GPUImageHSBFilter *hsbFilter;
 }
 
-@property (nonatomic, assign)CGFloat level;
-//- (void)setLevel:(CGFloat)level;
+/// 美颜效果。值越大效果越强。可适当调整
+@property (nonatomic, assign)CGFloat level;//默认值 0.6
 
-/// 磨皮等级调整
-@property (nonatomic, assign)CGFloat bilateralLevel;
+/// 磨皮, 双边模糊，平滑处理。值越小效果越强。建议保持默认值。
+@property (nonatomic, assign)CGFloat bilateralLevel;//默认值 4.0
 
-/// 边缘检测调整
-@property (nonatomic, assign)CGFloat cannyEdgeLevel;
+/// 饱和度。值越小画面越灰白，值越大色彩越强烈。可适当调整。
+@property (nonatomic, assign)CGFloat saturationLevel;//默认值 1.1
 
-/// 饱和度调整
-@property (nonatomic, assign)CGFloat saturationLevel;
-
-/// 亮度调整
-@property (nonatomic, assign)CGFloat brightnessLevel;
+/// 亮度。值越小画面越暗，值越大越明亮。可适当调整。
+@property (nonatomic, assign)CGFloat brightnessLevel;//默认值 1.1
 @end
