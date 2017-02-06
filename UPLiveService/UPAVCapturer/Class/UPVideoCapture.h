@@ -84,7 +84,7 @@ typedef NS_ENUM(NSInteger, UPAVCapturerPresetLevel) {
 @property (nonatomic) int32_t fps;//设置采集帧频
 @property (nonatomic) BOOL streamingOn;//默认为 YES，即 UPAVCapturer start 之后会立即推流直播;
 @property (nonatomic) BOOL camaraTorchOn;
-@property (nonatomic) BOOL filterOn;//美颜滤镜开
+@property (nonatomic) BOOL beautifyOn;//美颜滤镜开
 @property (nonatomic, strong) GPUImageBeautifyFilter *beautifyFilter;//美颜参数调整
 
 /**The torch control camera zoom scale default 1.0, between 1.0 ~ 3.0*/

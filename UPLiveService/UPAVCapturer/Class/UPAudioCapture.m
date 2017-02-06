@@ -9,9 +9,9 @@
 #import "UPAudioCapture.h"
 #import <AVFoundation/AVFoundation.h>
 #import <Accelerate/Accelerate.h>
-#import <UPLiveSDK/AudioProcessor.h>
+#import <UPLiveSDKDll/AudioProcessor.h>
 #import "UPAudioGraph.h"
-#import <UPLiveSDK/UPAVPlayer.h>
+#import <UPLiveSDKDll/UPAVPlayer.h>
 
 
 
@@ -59,6 +59,7 @@ static float UPAudioCapture_gain(float db) {
     AudioStreamBasicDescription _asbdBus0;//麦克风采集音频输入格式
     BOOL _asbdBus0Set;
     dispatch_queue_t _queue;
+    BOOL _audioCapturIsWorking;
 
 }
 @property (nonatomic) AudioComponentInstance audioUnit;
@@ -202,9 +203,41 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
         self.increaserRate = 100;
         [self setup];
         [self setupAudioGraph];
+        [self addNotificationObserver];
     }
     return self;
 }
+
+
+- (void)addNotificationObserver{
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(audioSessionInterruption:)
+                                                 name:AVAudioSessionInterruptionNotification
+                                               object:nil];
+
+    
+
+}
+
+
+
+
+- (void)audioSessionInterruption:(NSNotification *)notice {
+    if (_audioCapturIsWorking) {
+        if ([[notice.userInfo objectForKey:AVAudioSessionInterruptionTypeKey] integerValue] == 1) {
+            [self stop];
+            return;
+        }
+        
+        if ([[notice.userInfo objectForKey:AVAudioSessionInterruptionTypeKey] integerValue] == 0) {
+            [self start];
+            return;
+        }
+        
+        NSLog(@"audioSessionInterruption %@", notice.userInfo);
+    }
+}
+
 
 - (id)initWith:(UPAudioUnitCategory)category {
     return  [self initWith:category samplerate:44100];
@@ -252,6 +285,8 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
     [session setCategory:AVAudioSessionCategoryPlayAndRecord
              withOptions:AVAudioSessionCategoryOptionMixWithOthers | AVAudioSessionCategoryOptionDefaultToSpeaker
                    error:&error];
+    
+    
 }
 
 - (void)setup {
@@ -359,12 +394,14 @@ static OSStatus audioPlaybackCallback(void *inRefCon,
     [_audioGraph start];
     OSStatus status = AudioOutputUnitStart(_audioUnit);
     checkOSStatus(status);
+    _audioCapturIsWorking = YES;
 }
 - (void)stop {
     [_bgmPlayer stop];
     [_audioGraph stop];
     OSStatus status = AudioOutputUnitStop(_audioUnit);
     checkOSStatus(status);
+    _audioCapturIsWorking = NO;
 }
 
 - (void)processAudio:(AudioBufferList *)bufferList

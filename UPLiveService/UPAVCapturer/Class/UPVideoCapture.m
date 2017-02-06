@@ -73,7 +73,7 @@
         _capturerPresetLevelFrameCropSize = CGSizeZero;
         _fps = 24;
         _viewZoomScale = 1;
-        _filterOn = NO;
+        _beautifyOn = NO;
         [self addNotifications];
     }
     return self;
@@ -218,12 +218,12 @@
     //滤镜链
     [_videoCamera addTarget:_cropfilter];
 
-    if (_filterOn) {
+    if (_beautifyOn) {
         [_cropfilter addTarget:_beautifyFilter];
     }
     
     GPUImageOutput<GPUImageInput> *lastFilter;
-    if (!_filterOn) {
+    if (!_beautifyOn) {
         lastFilter = _cropfilter;
     } else {
         lastFilter = _beautifyFilter;
@@ -347,13 +347,13 @@
     }
     
     if (needRotation) {
-        float deltaR = pviewOrientation_ - videoOrientation_;
-        _gpuImageView.transform = CGAffineTransformMakeRotation(deltaR);
-        //长宽需要对调
-        if (fabs(deltaR) >= M_PI_4 && fabs(deltaR) <= (M_PI_4 + M_PI_2)) {
-            CGRect oldRect = _gpuImageView.frame;
-            _gpuImageView.frame = CGRectMake(0, 0, oldRect.size.height, oldRect.size.width);
-        }
+//        float deltaR = pviewOrientation_ - videoOrientation_;
+//        _gpuImageView.transform = CGAffineTransformMakeRotation(deltaR);
+//        //长宽需要对调
+//        if (fabs(deltaR) >= M_PI_4 && fabs(deltaR) <= (M_PI_4 + M_PI_2)) {
+//            CGRect oldRect = _gpuImageView.frame;
+//            _gpuImageView.frame = CGRectMake(0, 0, oldRect.size.height, oldRect.size.width);
+//        }
     }
     
     BOOL needFlip = NO;
@@ -487,8 +487,8 @@
     }
 }
 
-- (void)setFilterOn:(BOOL)filterOn {
-    _filterOn = filterOn;
+- (void)setBeautifyOn:(BOOL)beautifyOn {
+    _beautifyOn = beautifyOn;
     [self doSwitchFilters];
 }
 

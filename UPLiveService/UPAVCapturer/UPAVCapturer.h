@@ -9,14 +9,12 @@
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
-#import <UPLiveSDK/UPAVStreamer.h>
+#import <UPLiveSDKDll/UPAVStreamer.h>
 #import "UPAudioCapture.h"
 #import "UPVideoCapture.h"
 #import "GPUImage.h"
 #import "GPUImageBeautifyFilter.h"
-//#import <UPRtcSDK/RtcManager.h>
-
-
+#import <UPLiveSDKDll/RtcManager.h>
 
 typedef NS_ENUM(NSInteger, UPAVCapturerStatus) {
     UPAVCapturerStatusStopped,
@@ -56,11 +54,27 @@ typedef void(^NetworkStateBlock)(UPAVStreamerNetworkState level);
 /// 错误回调
 @required
 - (void)capturer:(UPAVCapturer *)capturer capturerError:(NSError *)error;
-
 /// 推流状态回调
 @optional
 - (void)capturer:(UPAVCapturer *)capturer pushStreamStatusDidChange:(UPPushAVStreamStatus)streamStatus;
+
+
+
+@optional//连麦回调
+- (void)capturer:(UPAVCapturer *)capturer rtcDidJoinedOfUid:(NSUInteger)uid;
+@optional//连麦回调
+- (void)capturer:(UPAVCapturer *)capturer rtcDidOfflineOfUid:(NSUInteger)uid reason:(NSUInteger)reason;
+@optional//连麦回调
+- (void)capturer:(UPAVCapturer *)capturer rtcDidOccurWarning:(NSUInteger)warningCode;
+@optional//连麦回调
+- (void)capturer:(UPAVCapturer *)capturer rtcDidOccurError:(NSUInteger)errorCode;
+@optional//连麦回调
+- (void)capturer:(UPAVCapturer *)capturer rtcConnectionDidLost:(id)rtcmanager;
 @end
+
+
+
+/*** rtc 远程用户进出房间回调接口 ***/
 
 
 @interface UPAVCapturer : NSObject
@@ -79,8 +93,8 @@ typedef void(^NetworkStateBlock)(UPAVStreamerNetworkState level);
 @property (nonatomic) BOOL streamingOn;
 /// 闪光灯开关
 @property (nonatomic) BOOL camaraTorchOn;
-/// 美颜滤镜开关
-@property (nonatomic) BOOL filterOn;
+/// 美颜开关
+@property (nonatomic) BOOL beautifyOn;
 /// 美颜参数调整
 @property (nonatomic, strong) GPUImageBeautifyFilter *beautifyFilter;
 
@@ -119,15 +133,12 @@ typedef void(^NetworkStateBlock)(UPAVStreamerNetworkState level);
 
 /****** 连麦功能******/
 
-/*** 设置连麦远程小视图
- frame: 目标视图视图尺寸和位置
- targetViewIndex：目标视图index。暂时支持3人连麦，两个小视图分别 index 为 0 和 1
- defaultShow：目标视图是否默认显示。当设置为 NO 时，只有在远程用户进入房间才显示相应视图，远程用户登出房间视图自动消失。
-***/
-- (void)rtcSetRemoteViewframe:(CGRect)frame targetViewIndex:(int)index defaultShow:(BOOL)on;
-- (void)rtcInitWithAppId:(NSString *)appid;
-- (int)rtcConnect:(NSString *)channelId;
-- (void)rtcClose;
+- (void)rtcSetViewMode:(int)mode;//设置连麦视图模式，0:主播模式，1:观众模式。
+- (void)rtcInitWithAppId:(NSString *)appid;//连麦模块初始化
+- (int)rtcConnect:(NSString *)channelId;//连麦
+- (void)rtcClose;//关闭
+- (UIView *)rtcRemoteView0WithFrame:(CGRect)frame;//连麦窗口0
+- (UIView *)rtcRemoteView1WithFrame:(CGRect)frame;//连麦窗口1
 
 
 

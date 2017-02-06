@@ -9,7 +9,7 @@
 #import "UPAudioGraph.h"
 #import <AVFoundation/AVFoundation.h>
 #import <Accelerate/Accelerate.h>
-#import <UPLiveSDK/AudioProcessor.h>
+#import <UPLiveSDKDll/AudioProcessor.h>
 
 //https://developer.apple.com/library/ios/documentation/MusicAudio/Conceptual/AudioUnitHostingGuide_iOS/AudioUnitHostingFundamentals/AudioUnitHostingFundamentals.html#//apple_ref/doc/uid/TP40009492-CH3-SW43
 #define kAUBus_0    0
